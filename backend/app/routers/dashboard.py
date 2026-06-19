@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends
 
 from ..auth import get_current_user_id
-from .resumes import _resumes
+from ..state import get_resumes
 
 router = APIRouter(tags=["dashboard"])
 
@@ -24,7 +24,7 @@ router = APIRouter(tags=["dashboard"])
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
     """Return high-level statistics for the current user's dashboard."""
-    user_resumes = [r for r in _resumes if r["user_id"] == user_id]
+    user_resumes = [r for r in get_resumes() if r["user_id"] == user_id]
 
     return {
         "total_jobs_found": 0,
