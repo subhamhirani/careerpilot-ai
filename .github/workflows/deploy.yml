@@ -1,7 +1,3 @@
-env:
-  BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
-  REGISTRY: ghcr.io
 jobs:
   backend-test:
     defaults:
@@ -43,43 +39,6 @@ jobs:
         REDIS_URL: redis://localhost:***@v3
       name: Run tests
       run: pytest -x -q 2>&1 || echo "No tests found"
-    - id: meta-backend
-      name: Docker meta backend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.BACKEND_IMAGE }}
-        tags: 'type=sha,prefix=
-
-          type=raw,value=latest'
-    - id: meta-frontend
-      name: Docker meta frontend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.FRONTEND_IMAGE }}
-        tags: 'type=sha,prefix=
-
-          type=raw,value=latest'
-    - if: github.event_name == 'push'
-      name: Login to GHCR
-      uses: docker/login-action@v3
-      with:
-        password: ${{ secrets.GITHUB_TOKEN }}
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-    - if: github.event_name == 'push'
-      name: Build and push backend
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-    - if: github.event_name == 'push'
-      name: Build and push frontend
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
   deploy:
     if: github.event_name == 'push'
     needs: backend-test
@@ -88,23 +47,19 @@ jobs:
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1
       with:
-        envs: GITHUB_TOKEN,BACKEND_IMAGE,FRONTEND_IMAGE,GITHUB_ACTOR
         host: ${{ secrets.HOST }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: "set -e\ncd /home/ubuntu/careerpilot\necho \"$GITHUB_TOKEN\" | docker\
-          \ login ghcr.io -u \"$GITHUB_ACTOR\" --password-stdin\nexport BACKEND_IMAGE=\"\
-          ${BACKEND_IMAGE}:latest\"\nexport FRONTEND_IMAGE=\"${FRONTEND_IMAGE}:latest\"\
-          \ndocker compose pull backend frontend\ndocker compose up -d backend\nsleep\
-          \ 10\nfor i in $(seq 1 12); do\n  if curl -sf http://localhost:7899/health\
-          \ >/dev/null 2>&1; then\n    echo \"Backend healthy\"\n    break\n  fi\n\
-          \  if [ \"$i\" -eq 12 ]; then\n    echo \"Backend health check failed\"\n\
-          \    exit 1\n  fi\n  echo \"Waiting for backend... ($i/12)\"\n  sleep 5\n\
-          done\ndocker compose up -d frontend\nsleep 5\nfor i in $(seq 1 6); do\n\
-          \  if curl -sf http://localhost:3000 >/dev/null 2>&1; then\n    echo \"\
-          Frontend healthy\"\n    break\n  fi\n  if [ \"$i\" -eq 6 ]; then\n    echo\
-          \ \"Frontend health check failed\"\n    exit 1\n  fi\n  echo \"Waiting for\
-          \ frontend... ($i/6)\"\n  sleep 5\ndone\ndocker compose up -d\necho \"Deployment\
-          \ complete!\"\ndocker compose ps"
+        script: "set -e\ncd /home/ubuntu/careerpilot\ngit pull origin main\ndocker\
+          \ compose build backend frontend\ndocker compose up -d backend\nsleep 10\n\
+          for i in $(seq 1 12); do\n  if curl -sf http://localhost:7899/health >/dev/null\
+          \ 2>&1; then\n    echo \"Backend healthy\"\n    break\n  fi\n  if [ \"$i\"\
+          \ -eq 12 ]; then\n    echo \"Backend health check failed\"\n    exit 1\n\
+          \  fi\n  echo \"Waiting... ($i/12)\"\n  sleep 5\ndone\ndocker compose up\
+          \ -d frontend\nsleep 5\nfor i in $(seq 1 6); do\n  if curl -sf http://localhost:3000\
+          \ >/dev/null 2>&1; then\n    echo \"Frontend healthy\"\n    break\n  fi\n\
+          \  if [ \"$i\" -eq 6 ]; then\n    echo \"Frontend health check failed\"\n\
+          \    exit 1\n  fi\n  echo \"Waiting... ($i/6)\"\n  sleep 5\ndone\ndocker\
+          \ compose up -d\necho \"Deployment complete!\"\ndocker compose ps"
         username: ${{ secrets.USERNAME }}
 name: CI/CD - CareerPilot AI
 'on':
