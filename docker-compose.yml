@@ -1,0 +1,181 @@
+
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: careerpilot-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-careerpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-careerpilot_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-careerpilot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-careerpilot} -d ${POSTGRES_DB:-careerpilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: careerpilot-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careerpilot-backend
+    restart: unless-stopped
+    ports:
+      - "7899:7899"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-careerpilot}:${POSTGRES_PASSWORD:-careerpilot_secret}@postgres:5432/${POSTGRES_DB:-careerpilot}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - backend_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careerpilot-worker
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-careerpilot}:${POSTGRES_PASSWORD:-careerpilot_secret}@postgres:5432/${POSTGRES_DB:-careerpilot}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - backend_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: celery -A app.celery_config.app worker --loglevel=info --concurrency=4
+    logging: *default-logging
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: careerpilot-beat
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-careerpilot}:${POSTGRES_PASSWORD:-careerpilot_secret}@postgres:5432/${POSTGRES_DB:-careerpilot}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - backend_storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: celery -A app.celery_config.app beat --loglevel=info
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: careerpilot-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:7899/api
+    depends_on:
+      - backend
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: careerpilot-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    logging: *default-logging
+
+  # ── Monitoring ──────────────────────────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: careerpilot-monitor
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    logging: *default-logging
+
+networks:
+  default:
+    name: careerpilot-network
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: careerpilot-postgres-data
+  redis_data:
+    name: careerpilot-redis-data
+  caddy_data:
+    name: careerpilot-caddy-data
+  caddy_config:
+    name: careerpilot-caddy-config
+  backend_storage:
+    name: careerpilot-backend-storage
+  uptime_kuma_data:
+    name: careerpilot-uptime-kuma-data
