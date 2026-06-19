@@ -1,0 +1,24 @@
+name: Deploy CareerPilot AI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/careerpilot
+            git pull origin main
+            docker compose build
+            docker compose up -d
+            docker compose ps
+            echo "Deployment complete!"
