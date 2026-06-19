@@ -22,3 +22,5 @@ build/
 *.zip
 .hermes/
 backups/
+dummy.pdf
+ollama-linux-amd64.tar.zst
