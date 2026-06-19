@@ -70,8 +70,6 @@ jobs:
       name: Build and push backend
       uses: docker/build-push-action@v5
       with:
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
         context: ./backend
         push: true
         tags: ${{ steps.meta-backend.outputs.tags }}
@@ -79,8 +77,6 @@ jobs:
       name: Build and push frontend
       uses: docker/build-push-action@v5
       with:
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
         context: ./frontend
         push: true
         tags: ${{ steps.meta-frontend.outputs.tags }}
