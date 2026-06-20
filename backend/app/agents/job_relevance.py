@@ -190,8 +190,9 @@ def _score_location(user_locations: list[str], job_location: str) -> float:
         if user_lower in job_loc:
             return 100.0
         # State match
-        user_parts = set(user_lower.replace(",", " ").split())
-        job_parts = set(job_loc.replace(",", " ").split())
+        ignore_words = {"san", "new", "city", "de", "el", "los", "las", "la", "st", "saint", "north", "south", "east", "west"}
+        user_parts = {p for p in user_lower.replace(",", " ").split() if p not in ignore_words}
+        job_parts = {p for p in job_loc.replace(",", " ").split() if p not in ignore_words}
         if user_parts & job_parts:
             return 70.0
 

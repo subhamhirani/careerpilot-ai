@@ -78,6 +78,54 @@ class ApplicationSubmitter:
         screenshot_before: Optional[str] = None
         screenshot_after: Optional[str] = None
 
+        # Validate resume_path to prevent path traversal
+        resume_abs_path = Path(resume_path).resolve()
+        allowed_prefixes = [
+            os.path.abspath("/app"),
+            os.path.abspath("/home/ubuntu"),
+            os.path.abspath(os.getcwd())
+        ]
+        is_allowed = any(str(resume_abs_path).startswith(prefix) for prefix in allowed_prefixes)
+        if not is_allowed:
+            return self._manual_result(
+                application_id,
+                f"Path traversal check failed: {resume_path} is outside allowed directories.",
+            )
+
+        # Validate application_url to prevent SSRF
+        allow_local = os.getenv("ALLOW_LOCAL_APPLICATIONS", "false").lower() == "true"
+        if not allow_local:
+            import socket
+            from urllib.parse import urlparse
+            try:
+                parsed_url = urlparse(application_url)
+                if parsed_url.scheme not in ("http", "https"):
+                    return self._manual_result(
+                        application_id,
+                        f"SSRF check failed: Invalid URL scheme '{parsed_url.scheme}'.",
+                    )
+                hostname = parsed_url.hostname
+                if not hostname:
+                    return self._manual_result(application_id, "SSRF check failed: Invalid URL hostname.")
+                ip = socket.gethostbyname(hostname)
+                ip_parts = [int(x) for x in ip.split(".")]
+                if (
+                    ip_parts[0] == 127 or
+                    ip_parts[0] == 10 or
+                    (ip_parts[0] == 172 and 16 <= ip_parts[1] <= 31) or
+                    (ip_parts[0] == 192 and ip_parts[1] == 168) or
+                    (ip_parts[0] == 169 and ip_parts[1] == 254)
+                ):
+                    return self._manual_result(
+                        application_id,
+                        f"SSRF check failed: Private/loopback IP address {ip} blocked.",
+                    )
+            except Exception as e:
+                return self._manual_result(
+                    application_id,
+                    f"SSRF validation exception: {e}",
+                )
+
         try:
             from playwright.async_api import async_playwright  # type: ignore[import-untyped]
         except ImportError:
@@ -88,10 +136,10 @@ class ApplicationSubmitter:
             )
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-
+            browser = None
             try:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
                 await page.goto(application_url, timeout=30_000)
 
                 # Screenshot before filling
@@ -185,7 +233,8 @@ class ApplicationSubmitter:
                     "error": str(exc),
                 }
             finally:
-                await browser.close()
+                if browser:
+                    await browser.close()
 
     # -- Form filling helpers ----------------------------------------------
 

@@ -18,6 +18,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Module-level model cache to avoid re-instantiation overhead
+_MODEL_CACHE: dict[str, Any] = {}
+
 # ---------------------------------------------------------------------------
 # Text extraction helpers
 # ---------------------------------------------------------------------------
@@ -279,6 +282,8 @@ class ResumeParser:
                 "sentence-transformers required. Install: pip install sentence-transformers"
             )
         logger.info("Generating embedding with model=%s (%d chars)", model_name, len(text))
-        model = SentenceTransformer(model_name)
+        if model_name not in _MODEL_CACHE:
+            _MODEL_CACHE[model_name] = SentenceTransformer(model_name)
+        model = _MODEL_CACHE[model_name]
         vector = model.encode(text, normalize_embeddings=True)
         return vector.tolist()
