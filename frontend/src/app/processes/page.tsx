@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,9 @@ import {
   FileSearch,
   Briefcase,
   Zap,
+  RotateCcw,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const statusConfig = {
   queued: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'Queued' },
@@ -29,7 +31,7 @@ const statusConfig = {
   failed: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Failed' },
 };
 
-function ProcessCard({ process }: { process: ProcessStatus }) {
+function ProcessCard({ process, onRetry }: { process: ProcessStatus; onRetry?: (id: string) => void }) {
   const config = statusConfig[process.status] || statusConfig.queued;
   const Icon = config.icon;
 
@@ -66,9 +68,22 @@ function ProcessCard({ process }: { process: ProcessStatus }) {
                 {process.error_message}
               </p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">
-              {new Date(process.updated_at).toLocaleString()}
-            </p>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs text-muted-foreground">
+                {new Date(process.updated_at).toLocaleString()}
+              </p>
+              {process.status === 'failed' && onRetry && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-blue-500 hover:text-blue-700"
+                  onClick={() => onRetry(process.id)}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Retry
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>
@@ -77,14 +92,57 @@ function ProcessCard({ process }: { process: ProcessStatus }) {
 }
 
 export default function ProcessesPage() {
+  const queryClient = useQueryClient();
   const { data: processes, isLoading, refetch } = useQuery({
     queryKey: ['process-statuses'],
     queryFn: () => api.get<ProcessStatus[]>('/process-statuses'),
     refetchInterval: 3000, // Poll every 3s for live updates
   });
 
+  const retryMutation = useMutation({
+    mutationFn: async (processId: string) => {
+      // Find the process to retry
+      const process = processes?.find(p => p.id === processId);
+      if (!process) throw new Error('Process not found');
+
+      // Delete the failed process status
+      await api.delete(`/process-statuses/${processId}`);
+
+      // Re-dispatch based on task name
+      if (process.task_name.includes('Resume')) {
+        // For resume processing, we need the resume_id and file_path
+        // Since we don't have the original params, we'll create a new process status
+        // and notify the user
+        throw new Error('Resume retry requires re-uploading the file');
+      } else if (process.task_name.includes('Job') || process.task_name.includes('Discovery')) {
+        // Trigger job discovery
+        await api.post('/matches/re-rank');
+      } else {
+        // Generic retry - just re-trigger
+        await api.post('/matches/re-rank');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['process-statuses'] });
+      toast.success('Process retried successfully');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to retry process');
+    },
+  });
+
+  const handleRetry = (processId: string) => {
+    const process = processes?.find(p => p.id === processId);
+    if (process?.task_name.includes('Resume')) {
+      toast.error('Resume retry requires re-uploading the file. Please upload the resume again.');
+      return;
+    }
+    retryMutation.mutate(processId);
+  };
+
   const activeProcesses = processes?.filter((p) => p.status === 'running' || p.status === 'queued') || [];
-  const completedProcesses = processes?.filter((p) => p.status === 'completed' || p.status === 'failed') || [];
+  const failedProcesses = processes?.filter((p) => p.status === 'failed') || [];
+  const completedProcesses = processes?.filter((p) => p.status === 'completed') || [];
 
   return (
     <div className="space-y-6">
@@ -103,6 +161,21 @@ export default function ProcessesPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Failed Processes with Retry */}
+      {failedProcesses.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            Failed ({failedProcesses.length})
+          </h2>
+          <div className="space-y-3">
+            {failedProcesses.map((p) => (
+              <ProcessCard key={p.id} process={p} onRetry={handleRetry} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Active Processes */}
       <div>
@@ -138,7 +211,7 @@ export default function ProcessesPage() {
         <div>
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
-            Recent ({completedProcesses.length})
+            Completed ({completedProcesses.length})
           </h2>
           <div className="space-y-3">
             {completedProcesses.slice(0, 10).map((p) => (

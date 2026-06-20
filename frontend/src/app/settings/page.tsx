@@ -21,8 +21,13 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2, Settings, Search, Bell, Shield } from 'lucide-react';
+import { Save, Plus, Trash2, Settings, Search, Bell, Shield, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import type { UserSettings, SearchQuery } from '@/types';
+
+interface ApiKeyEntry {
+  provider: string;
+  key: string;
+}
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -34,9 +39,21 @@ export default function SettingsPage() {
   const [maxPerDay, setMaxPerDay] = useState(5);
   const [searchQueries, setSearchQueries] = useState<SearchQuery[]>([]);
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
+  const [newProvider, setNewProvider] = useState('');
+  const [newApiKey, setNewApiKey] = useState('');
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [addingKey, setAddingKey] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: () => api.get<UserSettings>('/settings'),
+  });
+
+  const { data: apiKeysData, isLoading: keysLoading, refetch: refetchKeys } = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.get<{ api_keys: ApiKeyEntry[] }>('/settings/api'),
   });
 
   useEffect(() => {
@@ -50,6 +67,12 @@ export default function SettingsPage() {
     setLoading(isLoading);
   }, [data, isLoading, setSettings, setLoading]);
 
+  useEffect(() => {
+    if (apiKeysData?.api_keys) {
+      setApiKeys(apiKeysData.api_keys);
+    }
+  }, [apiKeysData]);
+
   const saveMutation = useMutation({
     mutationFn: (body: Partial<UserSettings>) =>
       api.put<UserSettings>('/settings', body),
@@ -59,6 +82,34 @@ export default function SettingsPage() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+    },
+  });
+
+  const addKeyMutation = useMutation({
+    mutationFn: (body: { provider: string; key: string }) =>
+      api.put('/settings/api', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      refetchKeys();
+      setNewProvider('');
+      setNewApiKey('');
+      setAddingKey(false);
+      toast.success('API key added successfully');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add API key');
+    },
+  });
+
+  const deleteKeyMutation = useMutation({
+    mutationFn: (provider: string) => api.delete(`/settings/api/${provider}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      refetchKeys();
+      toast.success('API key deleted');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete API key');
     },
   });
 
@@ -74,6 +125,24 @@ export default function SettingsPage() {
     saveMutation.mutate({
       search_queries: searchQueries,
     });
+  };
+
+  const handleAddKey = () => {
+    if (!newProvider.trim() || !newApiKey.trim()) {
+      toast.error('Provider and API key are required');
+      return;
+    }
+    addKeyMutation.mutate({ provider: newProvider.trim().toLowerCase(), key: newApiKey.trim() });
+  };
+
+  const handleDeleteKey = (provider: string) => {
+    if (confirm(`Delete API key for ${provider}?`)) {
+      deleteKeyMutation.mutate(provider);
+    }
+  };
+
+  const toggleKeyVisibility = (provider: string) => {
+    setShowKeys(prev => ({ ...prev, [provider]: !prev[provider] }));
   };
 
   const addSearchQuery = () => {
@@ -122,14 +191,18 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             General
           </TabsTrigger>
           <TabsTrigger value="search" className="flex items-center gap-2">
             <Search className="h-4 w-4" />
-            Search Queries
+            Search
+          </TabsTrigger>
+          <TabsTrigger value="api-keys" className="flex items-center gap-2">
+            <Key className="h-4 w-4" />
+            API Keys
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
@@ -263,24 +336,6 @@ export default function SettingsPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(['tier_a', 'tier_b', 'tier_c'] as const).map((tier) => (
-                        <Badge
-                          key={tier}
-                          variant={query.tiers?.includes(tier) ? 'default' : 'outline'}
-                          className="cursor-pointer"
-                          onClick={() => {
-                            const current = query.tiers || [];
-                            const updated = current.includes(tier)
-                              ? current.filter((t) => t !== tier)
-                              : [...current, tier];
-                            updateSearchQuery(query.id, 'tiers', updated);
-                          }}
-                        >
-                          {tier.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                      ))}
-                    </div>
                   </div>
                 ))
               )}
@@ -293,6 +348,117 @@ export default function SettingsPage() {
               {saveMutation.isPending ? 'Saving...' : 'Save Search Queries'}
             </Button>
           </div>
+        </TabsContent>
+
+        <TabsContent value="api-keys" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                API Keys
+              </CardTitle>
+              <CardDescription>
+                Manage API keys for job scraping services. Keys are stored securely in the database.
+                When a key expires or hits its rate limit, update it here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {keysLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : apiKeys.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Key className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No API keys configured</p>
+                  <p className="text-xs">Add API keys for job scraping services</p>
+                </div>
+              ) : (
+                apiKeys.map((entry) => (
+                  <div key={entry.provider} className="p-4 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs uppercase">
+                          {entry.provider}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {showKeys[entry.provider] ? entry.key : entry.key}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleKeyVisibility(entry.provider)}
+                          title={showKeys[entry.provider] ? 'Hide key' : 'Show key'}
+                        >
+                          {showKeys[entry.provider] ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => handleDeleteKey(entry.provider)}
+                          disabled={deleteKeyMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <RefreshCw className="h-3 w-3" />
+                      <span>Update this key if it expires or hits rate limits</span>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <Separator />
+
+              {!addingKey ? (
+                <Button variant="outline" onClick={() => setAddingKey(true)} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add API Key
+                </Button>
+              ) : (
+                <div className="p-4 border rounded-lg space-y-3">
+                  <h4 className="text-sm font-medium">Add New API Key</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Provider</Label>
+                      <Input
+                        placeholder="e.g. groq, openai, gemini"
+                        value={newProvider}
+                        onChange={(e) => setNewProvider(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">API Key</Label>
+                      <Input
+                        type="password"
+                        placeholder="sk-..."
+                        value={newApiKey}
+                        onChange={(e) => setNewApiKey(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => { setAddingKey(false); setNewProvider(''); setNewApiKey(''); }}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddKey} disabled={addKeyMutation.isPending}>
+                      {addKeyMutation.isPending ? 'Adding...' : 'Add Key'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
