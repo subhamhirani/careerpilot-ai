@@ -10,7 +10,7 @@
 
     # Route /health directly to the backend health check
     handle /health {
-        reverse_proxy backend:7899 {
+        reverse_proxy careerpilot-backend:7899 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
@@ -20,7 +20,7 @@
 
     # API reverse proxy to backend
     handle /api/* {
-        reverse_proxy backend:7899 {
+        reverse_proxy careerpilot-backend:7899 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
@@ -40,7 +40,6 @@
 
     # Static files / frontend
     handle {
-        root * /usr/share/caddy/html
         reverse_proxy frontend:3000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
