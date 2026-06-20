@@ -133,7 +133,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:7899/api
+      NEXT_PUBLIC_API_URL: http://backend:7899
     depends_on:
       - backend
     logging: *default-logging

@@ -55,13 +55,15 @@ async def list_applications(
     rows = db.execute(
         text(f"""
             SELECT a.id, a.job_posting_id, a.status, a.method,
-                   a.created_at, a.updated_at,
-                   jp.title, jp.location, c.name as company_name
+                   a.applied_at,
+                   jp.title, jp.location, c.name as company_name,
+                   ms.score as match_score, jp.source
             FROM applications a
             JOIN job_postings jp ON a.job_posting_id = jp.id
             LEFT JOIN companies c ON jp.company_id = c.id
+            LEFT JOIN match_scores ms ON ms.job_posting_id = a.job_posting_id AND ms.user_id = a.user_id
             WHERE {where}
-            ORDER BY a.created_at DESC
+            ORDER BY a.applied_at DESC
             LIMIT :limit OFFSET :offset
         """),
         params,
@@ -74,14 +76,19 @@ async def list_applications(
             "job_posting_id": str(row[1]),
             "status": row[2],
             "method": row[3],
-            "created_at": row[4].isoformat() if row[4] else None,
-            "updated_at": row[5].isoformat() if row[5] else None,
-            "job_title": row[6],
-            "job_location": row[7],
-            "company": row[8] or "Unknown",
+            "submitted_at": row[4].isoformat() if row[4] else None,
+            "match_score": row[8] if row[8] is not None else None,
+            "job": {
+                "title": row[5],
+                "location": row[6],
+                "company": row[7] or "Unknown",
+                "source": row[9],
+            },
+            "error_message": None,
+            "resume": None,
         })
 
-    return {"applications": applications, "total": total, "limit": limit, "offset": offset}
+    return {"data": applications, "total": total, "page": (offset // limit) + 1, "page_size": limit}
 
 
 @router.get("/{application_id}")

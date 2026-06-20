@@ -38,15 +38,21 @@ async def list_jobs(
     tier: Optional[str] = Query(None, description="Filter by match tier"),
     source: Optional[str] = Query(None, description="Filter by source"),
     location: Optional[str] = Query(None, description="Filter by location"),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None, description="Search by keyword"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    limit: int = Query(None, ge=1, le=100),
+    offset: int = Query(None, ge=0),
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(_get_db),
 ):
     """List job postings with optional filters."""
+    # Support both page/page_size and limit/offset conventions
+    actual_limit = limit if limit is not None else page_size
+    actual_offset = offset if offset is not None else (page - 1) * actual_limit
     # Build query dynamically
     conditions = []
-    params = {"limit": limit, "offset": offset}
+    params = {"limit": actual_limit, "offset": actual_offset}
 
     if status:
         conditions.append("jp.status = :status")
@@ -57,11 +63,15 @@ async def list_jobs(
     if location:
         conditions.append("jp.location ILIKE :location")
         params["location"] = f"%{location}%"
+    if search:
+        conditions.append("(jp.title ILIKE :search OR c.name ILIKE :search2)")
+        params["search"] = f"%{search}%"
+        params["search2"] = f"%{search}%"
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
     # Count total
-    count_sql = f"SELECT COUNT(*) FROM job_postings jp {where}"
+    count_sql = f"SELECT COUNT(*) FROM job_postings jp LEFT JOIN companies c ON jp.company_id = c.id {where}"
     total = db.execute(text(count_sql), params).scalar() or 0
 
     # Fetch jobs
@@ -89,7 +99,7 @@ async def list_jobs(
             "company": row[7] or "Unknown",
         })
 
-    return {"jobs": jobs, "total": total, "limit": limit, "offset": offset}
+    return {"data": jobs, "total": total, "page": (actual_offset // actual_limit) + 1, "page_size": actual_limit}
 
 
 @router.get("/{job_id}")
@@ -169,3 +179,37 @@ async def reject_job(job_id: str, user_id: str = Depends(get_current_user_id), d
     )
     db.commit()
     return {"status": "rejected", "job_id": job_id}
+
+
+@router.post("/{job_id}/apply")
+async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
+    """Apply to a job — creates an application record."""
+    from uuid import uuid4
+    
+    # Check job exists
+    job = db.execute(
+        text("SELECT id FROM job_postings WHERE id = :jid"),
+        {"jid": job_id},
+    ).fetchone()
+    if not job:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check not already applied
+    existing = db.execute(
+        text("SELECT id FROM applications WHERE job_posting_id = :jid AND user_id = :uid LIMIT 1"),
+        {"jid": job_id, "uid": uuid.UUID(user_id)},
+    ).fetchone()
+    if existing:
+        return {"status": "already_applied", "application_id": str(existing[0])}
+    
+    app_id = uuid4()
+    db.execute(
+        text("""
+            INSERT INTO applications (id, user_id, job_posting_id, status, method)
+            VALUES (:aid, :uid, :jid, 'pending_approval', 'manual')
+        """),
+        {"aid": app_id, "uid": uuid.UUID(user_id), "jid": job_id},
+    )
+    db.commit()
+    return {"status": "applied", "application_id": str(app_id), "job_id": job_id}
