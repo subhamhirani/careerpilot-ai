@@ -79,11 +79,19 @@ async def register(body: RegisterRequest):
     _email_to_id[body.email] = user_id
 
     # Also create user in the database so FK constraints work
+    db_err = None
     try:
         _create_user_in_db(user_id, body.email, _users[user_id]["password_hash"])
-    except Exception as db_err:
+    except Exception as e:
+        db_err = e
         import logging
-        logging.getLogger(__name__).warning("Failed to create user in DB: %s", db_err)
+        logging.getLogger(__name__).error("Failed to create user in DB: %s", e)
+
+    if db_err is not None:
+        # Roll back in-memory user so we don't have an inconsistent state
+        del _users[user_id]
+        del _email_to_id[body.email]
+        raise HTTPException(status_code=500, detail="Failed to create user in database. Please try again.")
 
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
@@ -99,13 +107,40 @@ async def register(body: RegisterRequest):
 
 @router.post("/login")
 async def login(body: LoginRequest):
-    """Authenticate and issue JWT tokens."""
+    """Authenticate and issue JWT tokens. Checks in-memory store first, then DB."""
     user_id = _email_to_id.get(body.email)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    user = _users[user_id]
-    if not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user_id is not None:
+        # In-memory user found
+        user = _users[user_id]
+        if not verify_password(body.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+    else:
+        # Fall back to database check
+        import os
+        from sqlalchemy import create_engine, text
+        dsn = os.getenv("DATABASE_URL", "")
+        if not dsn:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+        engine = create_engine(sync_dsn)
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(
+                    text("SELECT id, hashed_password FROM users WHERE email = :email"),
+                    {"email": body.email},
+                ).fetchone()
+                if result is None:
+                    raise HTTPException(status_code=401, detail="Invalid email or password")
+                user_id = str(result[0])
+                db_hash = result[1]
+            if not verify_password(body.password, db_hash):
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            # Re-populate in-memory store for subsequent requests
+            _users[user_id] = {"id": user_id, "email": body.email, "password_hash": db_hash}
+            _email_to_id[body.email] = user_id
+        finally:
+            engine.dispose()
 
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
@@ -131,6 +166,23 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
     """Return the current authenticated user's ID."""
     user = _users.get(user_id)
     if user is None:
+        # Look up from DB
+        import os
+        from sqlalchemy import create_engine, text
+        dsn = os.getenv("DATABASE_URL", "")
+        if dsn:
+            sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+            engine = create_engine(sync_dsn)
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        text("SELECT email FROM users WHERE id = :id"),
+                        {"id": user_id},
+                    ).fetchone()
+                    if result:
+                        return {"user_id": user_id, "email": result[0]}
+            finally:
+                engine.dispose()
         raise HTTPException(status_code=404, detail="User not found")
     return {"user_id": user_id, "email": user["email"]}
 
