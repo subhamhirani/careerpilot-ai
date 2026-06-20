@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useDashboardStore } from '@/lib/store';
 import { StatsCard } from '@/components/stats-card';
@@ -23,8 +23,11 @@ import {
   Calendar,
   Activity,
   Loader2,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import type { DashboardStats, ActivityItem } from '@/types';
 
 function ActivityIcon({ type }: { type: ActivityItem['type'] }) {
@@ -92,6 +95,83 @@ function LiveProcessesCard() {
             </div>
           );
         })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ScraperStatusCard() {
+  const { data: stats, refetch } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api.get<DashboardStats>('/dashboard/stats'),
+  });
+
+  const triggerScrape = useMutation({
+    mutationFn: () => api.post('/scraper/trigger', {}),
+    onSuccess: () => {
+      toast.success('Scrape triggered');
+      setTimeout(() => refetch(), 5000);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to trigger scrape');
+    },
+  });
+
+  const s = stats?.scraper;
+  if (!s) return null;
+
+  const lastRun = s.last_scrape_at
+    ? new Date(s.last_scrape_at).toLocaleString()
+    : 'Never';
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <RefreshCw className={`h-4 w-4 text-primary ${s.is_scraping ? 'animate-spin' : ''}`} />
+          Job Scraper
+        </CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => triggerScrape.mutate()}
+          disabled={triggerScrape.isPending || s.is_scraping}
+        >
+          <Loader2 className={`h-3 w-3 mr-1 ${triggerScrape.isPending ? 'animate-spin' : ''}`} />
+          {triggerScrape.isPending ? 'Scraping...' : 'Scrape Now'}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="p-3 rounded-lg border text-center">
+            <p className="text-2xl font-bold">{s.source_breakdown.linkedin}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+              <Search className="h-3 w-3" /> LinkedIn
+            </p>
+          </div>
+          <div className="p-3 rounded-lg border text-center">
+            <p className="text-2xl font-bold">{s.source_breakdown.naukri}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+              <Search className="h-3 w-3" /> Naukri
+            </p>
+          </div>
+          <div className="p-3 rounded-lg border text-center bg-primary/5">
+            <p className="text-2xl font-bold">{s.total_jobs}</p>
+            <p className="text-xs text-muted-foreground mt-1">Total</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Last run: {lastRun}
+          </span>
+          {s.is_scraping && (
+            <span className="flex items-center gap-1 text-blue-500">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Scraping...
+            </span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -181,6 +261,9 @@ export default function DashboardPage() {
 
       {/* Live Processes */}
       <LiveProcessesCard />
+
+      {/* Scraper Status */}
+      <ScraperStatusCard />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Top Matches */}

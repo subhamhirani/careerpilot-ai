@@ -63,6 +63,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:7899/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging: *default-logging
 
   worker:
@@ -84,6 +90,12 @@ services:
       redis:
         condition: service_healthy
     command: celery -A app.celery_config.app worker --loglevel=info --concurrency=2
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_config.app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging: *default-logging
 
   beat:
@@ -103,6 +115,12 @@ services:
       redis:
         condition: service_healthy
     command: celery -A app.celery_config.app beat --loglevel=info
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_config.app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging: *default-logging
 
   frontend:

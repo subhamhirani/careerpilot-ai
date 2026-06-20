@@ -20,8 +20,8 @@ load_dotenv()
 # Broker / Backend
 # ---------------------------------------------------------------------------
 
-BROKER_DEFAULT: str = "redis://localhost:***@"
-RESULT_DEFAULT: str = "redis://localhost:***@"
+BROKER_DEFAULT: str = "redis://redis:6379/0"
+RESULT_DEFAULT: str = "redis://redis:6379/1"
 
 BROKER_URL: str = os.getenv("CELERY_BROKER_URL", BROKER_DEFAULT)
 RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", RESULT_DEFAULT)
@@ -34,7 +34,7 @@ app = Celery(
     "careerpilot",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["app.tasks", "app.tasks_resume"],
+    include=["app.tasks", "app.tasks_resume", "app.tasks_scraper"],
 )
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,14 @@ app.conf.beat_schedule = {
             minute=int(os.getenv("CELERY_BEAT_REMINDER_MINUTE", "30")),
         ),
         "options": {"expires": 300},
+    },
+    "scrape-and-store-jobs": {
+        "task": "app.tasks_scraper.scrape_and_store_jobs",
+        "schedule": crontab(
+            hour=int(os.getenv("CELERY_BEAT_SCRAPE_HOUR", "2")),
+            minute=int(os.getenv("CELERY_BEAT_SCRAPE_MINUTE", "30")),
+        ),
+        "options": {"expires": 600},
     },
 }
 

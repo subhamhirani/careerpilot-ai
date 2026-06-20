@@ -67,8 +67,11 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
     try:
         rows = db.execute(
             text(
-                "SELECT id, title, company_id, overall_score FROM match_scores "
-                "WHERE user_id = :uid ORDER BY overall_score DESC LIMIT 5"
+                "SELECT jp.id, jp.title, COALESCE(c.name, '') as company, ms.score "
+                "FROM match_scores ms "
+                "JOIN job_postings jp ON ms.job_posting_id = jp.id "
+                "LEFT JOIN companies c ON jp.company_id = c.id "
+                "WHERE ms.user_id = :uid ORDER BY ms.score DESC LIMIT 5"
             ),
             {"uid": uid},
         ).fetchall()
@@ -76,7 +79,8 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
             top_matches.append({
                 "id": str(row[0]),
                 "title": row[1] or "Unknown",
-                "company": str(row[2]) if row[2] else "",
+                "company": row[2] or "",
+                "location": "",
                 "match_score": row[3] or 0,
             })
     except Exception:
@@ -126,6 +130,22 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
         ).scalar() or 0
         interview_rate = round((interview_count / app_count) * 100, 1)
 
+    # Scraper status — latest run and source breakdown
+    total_linkedin = db.execute(
+        text("SELECT COUNT(*) FROM job_postings WHERE source = 'linkedin'"),
+    ).scalar() or 0
+    total_naukri = db.execute(
+        text("SELECT COUNT(*) FROM job_postings WHERE source = 'naukri'"),
+    ).scalar() or 0
+    total_manual = db.execute(
+        text("SELECT COUNT(*) FROM job_postings WHERE source = 'manual'"),
+    ).scalar() or 0
+
+    last_scrape = db.execute(
+        text("SELECT MAX(discovered_at) FROM job_postings"),
+    ).scalar()
+    last_scrape_iso = last_scrape.isoformat() if last_scrape else None
+
     return {
         "total_jobs_found": match_count,
         "total_applications_sent": app_count,
@@ -133,6 +153,16 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
         "interview_rate": interview_rate,
         "top_matches": top_matches,
         "recent_activity": recent_activity,
+        "scraper": {
+            "total_jobs": total_linkedin + total_naukri + total_manual,
+            "source_breakdown": {
+                "linkedin": total_linkedin,
+                "naukri": total_naukri,
+                "manual": total_manual,
+            },
+            "last_scrape_at": last_scrape_iso,
+            "is_scraping": False,
+        },
     }
 
 

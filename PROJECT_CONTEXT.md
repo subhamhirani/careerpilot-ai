@@ -106,9 +106,8 @@ CareerPilot AI is a multi-agent job search/application platform using FastAPI + 
 - Worker/beat containers show "unhealthy" (no healthcheck defined) — cosmetic
 
 ## GitHub
-- Repo: https://github.com/subhamhirani/careerpilot-ai (private)
-- User: subhamhirani
-- Latest commit: 603fde7
+- Repo: public fork available (original by Subham Hirani)
+- Built by: Subham Hirani
 
 ## Environment
 - Ubuntu 26.04 LTS (AWS)

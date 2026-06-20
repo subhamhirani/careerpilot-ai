@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __app_name__, __version__
 from .auth import get_current_user_id
-from .routers import auth, resumes, jobs, matches, approvals, applications, dashboard, settings, process_status
+from .routers import scraper, auth, resumes, jobs, matches, approvals, applications, dashboard, settings, process_status
 from .routers.resumes import upload_resume
 from .telemetry import log_event
 
@@ -55,6 +55,7 @@ async def log_requests(request: Request, call_next):
     log_event("request", {"path": request.url.path, "method": request.method})
     return await call_next(request)
 
+app.include_router(scraper.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(resumes.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
@@ -64,7 +65,6 @@ app.include_router(applications.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(process_status.router, prefix="/api")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),

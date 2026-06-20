@@ -431,17 +431,27 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">Provider</Label>
-                      <Input
-                        placeholder="e.g. groq, openai, gemini"
-                        value={newProvider}
-                        onChange={(e) => setNewProvider(e.target.value)}
-                      />
+                      <Select value={newProvider} onValueChange={setNewProvider}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select provider..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="groq">Groq (LLM)</SelectItem>
+                          <SelectItem value="openai">OpenAI (LLM)</SelectItem>
+                          <SelectItem value="gemini">Gemini (LLM)</SelectItem>
+                          <SelectItem value="apify">Apify (Indeed Scraper)</SelectItem>
+                          <SelectItem value="linkedin">LinkedIn (Session Cookie)</SelectItem>
+                          <SelectItem value="naukri">Naukri (Session)</SelectItem>
+                          <SelectItem value="telegram">Telegram Bot</SelectItem>
+                          <SelectItem value="other">Other (custom)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">API Key</Label>
                       <Input
                         type="password"
-                        placeholder="sk-..."
+                        placeholder={newProvider === 'linkedin' ? 'li_at=...' : newProvider === 'apify' ? 'apify_api_...' : 'sk-...'}
                         value={newApiKey}
                         onChange={(e) => setNewApiKey(e.target.value)}
                       />

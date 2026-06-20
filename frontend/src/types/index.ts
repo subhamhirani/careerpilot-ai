@@ -111,6 +111,18 @@ export interface DashboardStats {
   interview_rate: number;
   top_matches: Job[];
   recent_activity: ActivityItem[];
+  scraper: ScraperStatus;
+}
+
+export interface ScraperStatus {
+  total_jobs: number;
+  source_breakdown: {
+    linkedin: number;
+    naukri: number;
+    manual: number;
+  };
+  last_scrape_at: string | null;
+  is_scraping: boolean;
 }
 
 export interface ActivityItem {

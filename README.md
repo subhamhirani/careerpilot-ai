@@ -1,10 +1,8 @@
 # CareerPilot AI
 
-Personalized Multi-Agent Job Search & Application Platform
+Multi-Agent Job Search & Application Platform
 
-**Owner:** Subham | **Location:** Ahmedabad, India  
-**Target Roles:** DevOps / Cloud / Infrastructure / SRE / Platform / IT Support  
-**Running Cost:** ₹0/month (beyond existing VPS)
+**Built by:** [Subham Hirani](https://github.com/subhamhirani)  
 
 ---
 
@@ -91,7 +89,7 @@ All components run on a **free** technology stack, making it possible to host th
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/subhamhirani/careerpilot-ai.git
+git clone https://github.com/your-org/careerpilot-ai.git
 cd careerpilot
 ```
 

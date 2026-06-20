@@ -290,10 +290,16 @@ class LinkedInScraper(BaseJobScraper):
 # ---------------------------------------------------------------------------
 
 class NaukriScraper(BaseJobScraper):
-    """Scrapes Naukri.com job listings."""
+    """Scrapes Naukri.com job listings via their public search API.
+
+    Naukri is a Next.js SPA — job data is not in the HTML.  We use the
+    public ``/jobapi/v1/search`` endpoint which returns structured JSON
+    with job titles, companies, locations, salary, etc.
+    """
 
     source_name = "naukri"
     BASE_URL = "https://www.naukri.com"
+    API_URL = "https://www.naukri.com/jobapi/v1/search"
 
     async def search(
         self,
@@ -304,88 +310,134 @@ class NaukriScraper(BaseJobScraper):
         jobs: list[JobPosting] = []
         client = await self._client()
 
-        loc_slug = location.replace(" ", "-") if location else ""
         for page in range(1, max_pages + 1):
-            search_url = (
-                f"{self.BASE_URL}/{query.replace(' ', '-')}-jobs"
-                f"{'-in-' + loc_slug if loc_slug else ''}"
-            )
-            if page > 1:
-                search_url += f"-{page}"
+            params = {
+                "query": query,
+                "location": location or "India",
+                "pageNo": page,
+                "pageSize": 20,
+            }
+            url = f"{self.API_URL}?{urlencode(params)}"
 
             await self.rate_limiter.acquire("naukri")
-            logger.info("Naukri page %d: %s", page, search_url)
+            logger.info("Naukri page %d: %s", page, url)
 
             try:
-                resp = await client.get(search_url)
+                resp = await client.get(
+                    url,
+                    headers={
+                        "Accept": "application/json",
+                        "Referer": "https://www.naukri.com/",
+                    },
+                )
                 resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 logger.warning("Naukri HTTP error on page %d: %s", page, exc)
                 continue
 
-            soup = self._soup(resp.text)
+            try:
+                data = resp.json()
+            except Exception:
+                logger.warning("Naukri returned non-JSON on page %d", page)
+                continue
 
-            # Naukri uses a data-driven widget; try common selectors
-            cards = (
-                soup.select("article.jobTuple")
-                or soup.select("div.jobTuple")
-                or soup.select("section.job-listing")
-                or soup.select("div[type='job']")
-            )
-
-            for card in cards:
+            for item in data.get("list", []):
                 try:
-                    job = self._parse_card(card)
+                    job = self._parse_api_item(item)
                     if job:
                         jobs.append(job)
                 except Exception:
-                    logger.debug("Skipping unparseable Naukri card", exc_info=True)
+                    logger.debug("Skipping unparseable Naukri item", exc_info=True)
 
+            logger.info("Naukri page %d: parsed %d jobs", page, len(data.get("list", [])))
             await asyncio.sleep(1.0)
 
         logger.info("Naukri returned %d jobs for query=%s", len(jobs), query)
         return jobs
 
-    def _parse_card(self, card: BeautifulSoup) -> JobPosting | None:
-        title_el = (
-            card.select_one("a.title")
-            or card.select_one("a[class*='title']")
-            or card.select_one("h2 a")
-        )
-        if not title_el:
+    @staticmethod
+    def _parse_api_item(item: dict) -> JobPosting | None:
+        """Convert a Naukri API job dict to a JobPosting."""
+        title = item.get("post", "") or item.get("tupleDesc", "")
+        if not title:
             return None
-        title = title_el.get_text(strip=True)
 
-        company_el = (
-            card.select_one("a.subTitle")
-            or card.select_one("span[class*='company']")
-            or card.select_one("a[class*='company']")
-        )
-        company = company_el.get_text(strip=True) if company_el else ""
+        # Clean HTML from title
+        title = re.sub(r"<[^>]+>", "", title).strip()
+        if not title:
+            return None
 
-        loc_el = (
-            card.select_one("span.location")
-            or card.select_one("span[class*='loc']")
-            or card.select_one("li[class*='location']")
-        )
-        location = self._normalise_location(loc_el.get_text(strip=True)) if loc_el else ""
+        company = item.get("companyName", "") or item.get("CONTCOM", "")
+        location = item.get("cityfield", "")
+        # Clean up location string
+        location = re.sub(r"\s+", " ", location).strip()
 
-        link = title_el.get("href", "")
-        url = urljoin(self.BASE_URL, link) if link else ""
-        job_id = ""
-        if url:
-            match = re.search(r"/(?:job-details/)?([\w-]+)", url)
-            if match:
-                job_id = match.group(1)
+        # Salary
+        min_sal = item.get("minSal", 0) or 0
+        max_sal = item.get("maxSal", 0) or 0
+        try:
+            min_sal = float(min_sal)
+        except (ValueError, TypeError):
+            min_sal = 0
+        try:
+            max_sal = float(max_sal)
+        except (ValueError, TypeError):
+            max_sal = 0
+        currency = item.get("currencySal", "INR")
+        salary = ""
+        if min_sal > 0 and max_sal > 0:
+            salary = f"{currency} {int(min_sal)} - {int(max_sal)}"
+        elif min_sal > 0:
+            salary = f"{currency} {int(min_sal)}+"
+
+        # Experience
+        min_exp = item.get("minExp", 0) or 0
+        max_exp = item.get("maxExp", 0) or 0
+        try:
+            min_exp = float(min_exp)
+        except (ValueError, TypeError):
+            min_exp = 0
+        try:
+            max_exp = float(max_exp)
+        except (ValueError, TypeError):
+            max_exp = 0
+        experience = ""
+        if min_exp > 0 and max_exp > 0:
+            experience = f"{int(min_exp)}-{int(max_exp)} years"
+        elif min_exp > 0:
+            experience = f"{int(min_exp)}+ years"
+
+        # Employment type
+        employment_type = item.get("employmentType", "")
+
+        # Description (strip HTML)
+        job_desc = item.get("jobDesc", "") or ""
+        description = re.sub(r"<[^>]+>", " ", job_desc).strip()[:2000] if job_desc else ""
+
+        # URL
+        url = item.get("urlStr", "") or item.get("nonStaticUrlFor", "")
+        if url and not url.startswith("http"):
+            url = urljoin("https://www.naukri.com", url)
+
+        # Job ID for dedup
+        source_job_id = str(item.get("jobId", "")) or hashlib.md5(url.encode()).hexdigest()[:12]
+
+        # Keywords as skills proxy
+        keywords_raw = item.get("keywords", "")
+        skills = [k.strip() for k in keywords_raw.split(",") if k.strip()] if keywords_raw else []
 
         return JobPosting(
-            source=self.source_name,
-            source_job_id=job_id or hashlib.md5(url.encode()).hexdigest()[:12],
+            source="naukri",
+            source_job_id=source_job_id,
             title=title,
             company=company,
             location=location,
-            description="",
+            description=description,
             url=url,
+            salary=salary,
+            employment_type=employment_type,
+            skills=skills,
+            experience_required=experience,
         )
 
 
@@ -396,14 +448,14 @@ class NaukriScraper(BaseJobScraper):
 class IndeedIndiaScraper(BaseJobScraper):
     """Indeed India job scraper.
 
-    NOTE: Indeed actively blocks automated scraping. This implementation
-    provides the correct structure; a production deployment would likely
-    need to use Indeed's official Publisher API / Inddeed Feed or a proxy
-    rotation service (e.g. ScrapingBee, BrightData).
+    Scrapes the Indeed India public job search page.  Indeed uses
+    obfuscated CSS class names that change frequently, so we try a broad
+    set of selectors and also fall back to JSON-LD structured data
+    embedded in the page (``<script type="application/ld+json">``) which
+    is more stable.
 
-    For now the stub logs a warning and returns an empty list.  Replace the
-    body of :meth:`search` with a real implementation when you have an API
-    key or proxy solution.
+    For production at scale, consider Indeed's Publisher API or a proxy
+    rotation service (ScrapingBee, BrightData).
     """
 
     source_name = "indeed"
@@ -415,11 +467,6 @@ class IndeedIndiaScraper(BaseJobScraper):
         location: str = "",
         max_pages: int = 2,
     ) -> list[JobPosting]:
-        logger.warning(
-            "IndeedIndiaScraper is a stub. Indeed blocks automated scraping; "
-            "use the Indeed Publisher API or a proxy service in production."
-        )
-
         jobs: list[JobPosting] = []
         client = await self._client()
 
@@ -428,6 +475,7 @@ class IndeedIndiaScraper(BaseJobScraper):
                 "q": query,
                 "l": location or "India",
                 "start": page * 10,
+                "sort": "date",
             }
             url = f"{self.BASE_URL}/jobs?{urlencode(params)}"
 
@@ -435,37 +483,241 @@ class IndeedIndiaScraper(BaseJobScraper):
             logger.info("Indeed page %d: %s", page + 1, url)
 
             try:
-                resp = await client.get(url)
+                resp = await client.get(
+                    url,
+                    headers={
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "en-IN,en;q=0.9",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                        "Cache-Control": "max-age=0",
+                    },
+                    follow_redirects=True,
+                )
                 resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 logger.warning("Indeed HTTP error on page %d: %s", page + 1, exc)
+                # If 403, try the RSS feed fallback
+                if exc.response is not None and exc.response.status_code == 403:
+                    logger.info("Indeed blocked direct scraping, trying RSS feed fallback")
+                    rss_jobs = await self._rss_fallback(client, query, location or "India")
+                    jobs.extend(rss_jobs)
                 continue
 
             soup = self._soup(resp.text)
+            page_jobs: list[JobPosting] = []
 
-            # Indeed uses obfuscated class names — this is inherently fragile.
-            # The selectors below are based on observed patterns as of mid-2025.
-            cards = (
-                soup.select("div.job_seen_beacon")
-                or soup.select("div[data-testid='job-card']")
-                or soup.select("div.jobCard")
-                or soup.select("li[data-ocg-job]")
-            )
+            # Strategy 1: JSON-LD structured data (most reliable)
+            json_ld_jobs = self._parse_json_ld(soup)
+            if json_ld_jobs:
+                page_jobs.extend(json_ld_jobs)
 
-            for card in cards:
-                try:
-                    job = self._parse_card(card)
-                    if job:
-                        jobs.append(job)
-                except Exception:
-                    logger.debug("Skipping unparseable Indeed card", exc_info=True)
+            # Strategy 2: HTML card scraping (fallback)
+            if not page_jobs:
+                html_jobs = self._parse_html_cards(soup)
+                page_jobs.extend(html_jobs)
+
+            jobs.extend(page_jobs)
+            logger.info("Indeed page %d: parsed %d jobs", page + 1, len(page_jobs))
 
             await asyncio.sleep(2.0)  # Indeed is aggressive about rate detection
 
         logger.info("Indeed returned %d jobs for query=%s", len(jobs), query)
         return jobs
 
-    def _parse_card(self, card: BeautifulSoup) -> JobPosting | None:
+    async def _rss_fallback(
+        self, client: httpx.AsyncClient, query: str, location: str
+    ) -> list[JobPosting]:
+        """Fallback: use Indeed's RSS feed when direct scraping is blocked."""
+        import xml.etree.ElementTree as ET
+
+        rss_url = f"{self.BASE_URL}/rss?q={urlencode({'q': query})}&l={urlencode({'l': location or 'India'})}"
+        logger.info("Indeed RSS fallback: %s", rss_url)
+
+        try:
+            resp = await client.get(rss_url)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            logger.warning("Indeed RSS fallback also failed")
+            return []
+
+        try:
+            root = ET.fromstring(resp.text)
+        except ET.ParseError:
+            logger.warning("Indeed RSS returned invalid XML")
+            return []
+
+        jobs: list[JobPosting] = []
+        # RSS 2.0
+        for item in root.findall(".//item")[:20]:
+            title_el = item.find("title")
+            link_el = item.find("link")
+            if title_el is None:
+                continue
+            title = title_el.text or ""
+            url = link_el.text or "" if link_el is not None else ""
+            if not title:
+                continue
+
+            # Try to extract company from title (common pattern: "Job Title - Company")
+            company = ""
+            if " - " in title:
+                parts = title.rsplit(" - ", 1)
+                title = parts[0].strip()
+                company = parts[1].strip()
+
+            jobs.append(JobPosting(
+                source="indeed",
+                source_job_id=hashlib.md5(url.encode()).hexdigest()[:12],
+                title=title,
+                company=company,
+                description="",
+                url=url,
+            ))
+
+        logger.info("Indeed RSS fallback returned %d jobs", len(jobs))
+        return jobs
+
+    # -- JSON-LD parsing (Strategy 1) -----------------------------------
+
+    def _parse_json_ld(self, soup: BeautifulSoup) -> list[JobPosting]:
+        """Extract jobs from ``<script type="application/ld+json">`` blocks.
+
+        Indeed embeds ``JobPosting`` schema.org structured data in the
+        search results page.  This is more stable than CSS selectors.
+        """
+        import json as _json
+
+        jobs: list[JobPosting] = []
+        for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            try:
+                data = _json.loads(script.string or "")
+            except (_json.JSONDecodeError, TypeError):
+                continue
+
+            # The page may contain a single JobPosting or a list under @graph
+            items = []
+            if isinstance(data, dict) and data.get("@graph"):
+                items = data["@graph"]
+            elif isinstance(data, dict) and data.get("@type") == "JobPosting":
+                items = [data]
+            elif isinstance(data, dict) and data.get("@type") == "ItemList":
+                items = data.get("itemListElement", [])
+            elif isinstance(data, list):
+                items = data
+
+            for item in items:
+                if isinstance(item, dict):
+                    job = self._parse_json_ld_item(item)
+                    if job:
+                        jobs.append(job)
+
+        return jobs
+
+    @staticmethod
+    def _parse_json_ld_item(item: dict) -> JobPosting | None:
+        """Convert a single JSON-LD JobPosting dict to a JobPosting."""
+        title = item.get("title", "")
+        if not title:
+            return None
+
+        # hiringOrganization can be a string or a dict
+        hiring_org = item.get("hiringOrganization", {})
+        company = ""
+        if isinstance(hiring_org, dict):
+            company = hiring_org.get("name", "")
+        elif isinstance(hiring_org, str):
+            company = hiring_org
+
+        # jobLocation can be a string or a dict with address
+        job_loc = item.get("jobLocation", {})
+        location = ""
+        if isinstance(job_loc, dict):
+            address = job_loc.get("address", {})
+            if isinstance(address, dict):
+                location = address.get("addressLocality", "") or address.get("addressRegion", "")
+            elif address:
+                location = str(address)
+        elif isinstance(job_loc, str):
+            location = job_loc
+
+        # URL
+        url = item.get("url", "")
+
+        # description
+        description = item.get("description", "")
+
+        # datePosted
+        posted_at = item.get("datePosted", "")
+
+        # identifier
+        source_job_id = str(item.get("identifier", {}).get("value", "")) if isinstance(item.get("identifier"), dict) else ""
+
+        # salary from baseSalary
+        salary = ""
+        base_salary = item.get("baseSalary", {})
+        if isinstance(base_salary, dict):
+            value = base_salary.get("value", {})
+            if isinstance(value, dict):
+                min_val = value.get("minValue", "")
+                max_val = value.get("maxValue", "")
+                currency = value.get("currency", "INR")
+                if min_val and max_val:
+                    salary = f"{currency} {min_val} - {max_val}"
+                elif min_val:
+                    salary = f"{currency} {min_val}+"
+
+        # employmentType
+        employment_type = item.get("employmentType", "")
+
+        # experienceRequired (not standard in schema.org but Indeed sometimes includes it)
+        experience_required = item.get("experienceRequirements", "") or item.get("experienceRequired", "")
+
+        # skills (not standard but sometimes present)
+        skills_raw = item.get("skills", [])
+        skills = [s.strip() for s in skills_raw] if isinstance(skills_raw, list) else []
+
+        return JobPosting(
+            source="indeed",
+            source_job_id=source_job_id or hashlib.md5(url.encode()).hexdigest()[:12],
+            title=title,
+            company=company,
+            location=location,
+            description=description[:2000] if description else "",
+            url=url,
+            posted_at=posted_at,
+            salary=salary,
+            employment_type=employment_type if isinstance(employment_type, str) else "",
+            skills=skills,
+            experience_required=experience_required if isinstance(experience_required, str) else "",
+        )
+
+    # -- HTML card parsing (Strategy 2, fallback) ---------------------
+
+    def _parse_html_cards(self, soup: BeautifulSoup) -> list[JobPosting]:
+        """Fallback: parse jobs from HTML card elements."""
+        jobs: list[JobPosting] = []
+
+        cards = (
+            soup.select("div.job_seen_beacon")
+            or soup.select("div[data-testid='job-card']")
+            or soup.select("div.jobCard")
+            or soup.select("li[data-ocg-job]")
+            or soup.select("div.jobsearch-SerpJobCard")
+            or soup.select("td.resultContent")
+        )
+
+        for card in cards:
+            try:
+                job = self._parse_html_card(card)
+                if job:
+                    jobs.append(job)
+            except Exception:
+                logger.debug("Skipping unparseable Indeed card", exc_info=True)
+
+        return jobs
+
+    def _parse_html_card(self, card: BeautifulSoup) -> JobPosting | None:
         title_el = (
             card.select_one("h2.jobTitle a")
             or card.select_one("a[data-testid='job-card-title']")
@@ -476,7 +728,6 @@ class IndeedIndiaScraper(BaseJobScraper):
             return None
         title = title_el.get_text(strip=True)
 
-        # Indeed often puts company in a span with data-testid
         company_el = (
             card.select_one("span[data-testid='company-name']")
             or card.select_one("span.companyName")
@@ -490,7 +741,6 @@ class IndeedIndiaScraper(BaseJobScraper):
         )
         location = self._normalise_location(loc_el.get_text(strip=True)) if loc_el else ""
 
-        # Link
         link = title_el.get("href", "") if title_el else ""
         url = urljoin(self.BASE_URL, link) if link else ""
 
