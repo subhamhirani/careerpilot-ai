@@ -27,8 +27,9 @@ RUN apt-get purge -y gcc && rm -rf /var/lib/apt/lists/*
 # Copy application code
 COPY . .
 
-# Create non-root user
+# Create non-root user and upload directory
 RUN groupadd -r careerpilot && useradd -r -g careerpilot -d /app -s /bin/false careerpilot && \
+    mkdir -p /app/storage/uploads && \
     chown -R careerpilot:careerpilot /app
 USER careerpilot
 

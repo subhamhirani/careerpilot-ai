@@ -31,6 +31,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirm, setRegConfirm] = useState('');
+  const [regFullName, setRegFullName] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +67,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     }
     setLoading(true);
     try {
-      await register(regEmail, regPassword);
+      await register(regEmail, regPassword, regFullName || undefined);
       toast.success('Account created successfully');
       onOpenChange(false);
     } catch (err) {
@@ -120,6 +121,16 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
 
           <TabsContent value="register">
             <form onSubmit={handleRegister} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="reg-name">Full Name</Label>
+                <Input
+                  id="reg-name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={regFullName}
+                  onChange={(e) => setRegFullName(e.target.value)}
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="reg-email">Email</Label>
                 <Input

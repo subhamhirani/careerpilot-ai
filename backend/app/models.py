@@ -165,6 +165,9 @@ class User(Base):
     telegram_settings: Mapped[Optional["TelegramSettings"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    api_settings: Mapped[Optional["ApiSettings"]] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
     search_preferences: Mapped[List["SearchPreference"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -357,6 +360,9 @@ class JobPosting(Base):
     applications: Mapped[List["Application"]] = relationship(
         back_populates="job_posting", cascade="all, delete-orphan"
     )
+    cover_letters: Mapped[List["CoverLetter"]] = relationship(
+        back_populates="job_posting", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<JobPosting {self.title} @ {self.company_id}>"
@@ -434,10 +440,39 @@ class CoverLetter(Base):
 
     # Relationships
     user: Mapped["User"] = relationship(back_populates="cover_letters")
-    job_posting: Mapped["JobPosting"] = relationship()
+    job_posting: Mapped["JobPosting"] = relationship(back_populates="cover_letters")
 
     def __repr__(self) -> str:
-        return f"<CoverLetter {self.title}>"
+        return f"<CoverLetter {self.id} user={self.user_id}>"
+
+
+# ──────────────────────────────────────────────
+#  Process Status (Monitoring)
+# ──────────────────────────────────────────────
+
+class ProcessStatus(Base):
+    __tablename__ = "process_statuses"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    task_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="queued") # queued, running, completed, failed
+    progress_pct: Mapped[int] = mapped_column(Integer, default=0)
+    current_step: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=_utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProcessStatus {self.task_name} status={self.status}>"
 
 
 # ──────────────────────────────────────────────
@@ -561,9 +596,27 @@ class AuditLog(Base):
         return f"<AuditLog {self.action} {self.entity_type}/{self.entity_id}>"
 
 
-# ──────────────────────────────────────────────
-#  Telegram Settings
-# ──────────────────────────────────────────────
+
+class ApiSettings(Base):
+    __tablename__ = "api_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    provider_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    api_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="api_settings")
+
 
 class TelegramSettings(Base):
     __tablename__ = "telegram_settings"

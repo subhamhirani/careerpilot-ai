@@ -18,7 +18,7 @@ from ..state import get_resumes, add_resume, remove_resume
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
 # In-memory resume store (per container lifetime)
-UPLOAD_DIR = "/app/uploads"
+UPLOAD_DIR = "/app/storage/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -66,6 +66,24 @@ async def upload_resume(
         "updated_at": datetime.datetime.utcnow().isoformat(),
     }
     add_resume(resume_record)
+
+    # Trigger async resume processing pipeline
+    try:
+        from app.tasks_resume import process_resume
+        import logging as _logging
+        _logging.getLogger(__name__).info("Dispatching process_resume task for resume_id=%s", resume_id)
+        result = process_resume.delay(
+            resume_id=resume_id,
+            file_path=filepath,
+            user_id=user_id,
+        )
+        _logging.getLogger(__name__).info("process_resume task dispatched: %s", result.id)
+    except Exception as task_err:
+        # Don't fail the upload if task dispatch fails
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to dispatch process_resume task: %s", task_err
+        )
 
     return {
         "id": resume_id,

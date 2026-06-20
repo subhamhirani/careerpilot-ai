@@ -17,10 +17,12 @@ import {
   Settings,
   Rocket,
   X,
+  Activity,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/processes', label: 'Live Processes', icon: Activity },
   { href: '/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/approvals', label: 'Approvals', icon: CheckSquare },
   { href: '/applications', label: 'Applications', icon: Send },

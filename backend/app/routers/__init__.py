@@ -1,1 +1,11 @@
-"""CareerPilot AI — REST API Routers."""
+__all__ = [
+    "auth",
+    "resumes",
+    "jobs",
+    "matches",
+    "approvals",
+    "applications",
+    "dashboard",
+    "settings",
+    "process_status",
+]

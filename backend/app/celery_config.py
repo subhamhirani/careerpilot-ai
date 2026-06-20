@@ -34,7 +34,7 @@ app = Celery(
     "careerpilot",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["app.tasks", "app.bot"],
+    include=["app.tasks", "app.tasks_resume"],
 )
 
 # ---------------------------------------------------------------------------

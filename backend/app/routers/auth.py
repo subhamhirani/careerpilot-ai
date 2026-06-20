@@ -31,6 +31,27 @@ _users: dict[str, dict] = {}          # email → {id, email, password_hash}
 _email_to_id: dict[str, str] = {}     # email → user_id
 
 
+def _create_user_in_db(user_id: str, email: str, password_hash: str) -> None:
+    """Create a user row in PostgreSQL so FK constraints work for Celery tasks."""
+    import os
+    from sqlalchemy import create_engine, text
+
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        return
+    sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+    engine = create_engine(sync_dsn)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw) ON CONFLICT (id) DO NOTHING"),
+                {"id": user_id, "email": email, "pw": password_hash},
+            )
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
@@ -56,6 +77,13 @@ async def register(body: RegisterRequest):
         "password_hash": hash_password(body.password),
     }
     _email_to_id[body.email] = user_id
+
+    # Also create user in the database so FK constraints work
+    try:
+        _create_user_in_db(user_id, body.email, _users[user_id]["password_hash"])
+    except Exception as db_err:
+        import logging
+        logging.getLogger(__name__).warning("Failed to create user in DB: %s", db_err)
 
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)

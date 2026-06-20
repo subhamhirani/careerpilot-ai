@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useDashboardStore } from '@/lib/store';
 import { StatsCard } from '@/components/stats-card';
-import { JobCard } from '@/components/job-card';
 import { MatchScoreBadge } from '@/components/match-score-badge';
+import { useProcessStatuses, ProcessStatus } from '@/lib/hooks/use-process-statuses';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,8 @@ import {
   CheckCircle,
   XCircle,
   Calendar,
+  Activity,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { DashboardStats, ActivityItem } from '@/types';
@@ -41,6 +44,57 @@ function ActivityIcon({ type }: { type: ActivityItem['type'] }) {
     default:
       return <Bell className="h-4 w-4 text-muted-foreground" />;
   }
+}
+
+const statusConfig: Record<string, { icon: typeof CheckCircle; color: string; label: string }> = {
+  queued: { icon: Clock, color: 'text-yellow-500', label: 'Queued' },
+  running: { icon: Loader2, color: 'text-blue-500', label: 'Running' },
+  completed: { icon: CheckCircle, color: 'text-green-500', label: 'Completed' },
+  failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
+};
+
+function LiveProcessesCard() {
+  const { data: processes } = useProcessStatuses();
+  const active = processes?.filter((p) => p.status === 'running' || p.status === 'queued') || [];
+
+  if (!active.length) return null;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Activity className="h-4 w-4 text-primary" />
+          Live Processes
+        </CardTitle>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/processes">
+            View all <ArrowRight className="ml-1 h-3 w-3" />
+          </Link>
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {active.map((proc) => {
+          const cfg = statusConfig[proc.status] || statusConfig.queued;
+          const Icon = cfg.icon;
+          return (
+            <div key={proc.id} className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium truncate mr-2">{proc.task_name}</span>
+                <span className={`text-xs shrink-0 flex items-center gap-1 ${cfg.color}`}>
+                  <Icon className={`h-3 w-3 ${proc.status === 'running' ? 'animate-spin' : ''}`} />
+                  {cfg.label}
+                </span>
+              </div>
+              <Progress value={proc.progress_pct} className="h-1.5" />
+              {proc.current_step && (
+                <p className="text-xs text-muted-foreground truncate">{proc.current_step}</p>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function DashboardPage() {
@@ -125,7 +179,9 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Top Matches & Recent Activity */}
+      {/* Live Processes */}
+      <LiveProcessesCard />
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Top Matches */}
         <Card>
