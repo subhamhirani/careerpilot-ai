@@ -359,8 +359,14 @@ export default function SettingsPage() {
               </CardTitle>
               <CardDescription>
                 Manage API keys for job scraping services. Keys are stored securely in the database.
-                When a key expires or hits its rate limit, update it here.
               </CardDescription>
+              <div className="mt-2 rounded-lg bg-muted/50 p-3 text-xs space-y-1.5 text-muted-foreground">
+                <p><strong>Groq / OpenAI / Gemini</strong> — <span className="font-mono">console.groq.com</span> / <span className="font-mono">platform.openai.com/api-keys</span> / <span className="font-mono">aistudio.google.com</span></p>
+                <p><strong>Apify (Indeed)</strong> — <span className="font-mono">console.apify.com</span> → create scraper API token</p>
+                <p><strong>LinkedIn</strong> — browser cookies → copy <span className="font-mono">li_at</span> value from linkedin.com</p>
+                <p><strong>Naukri</strong> — browser cookies → copy session token from naukri.com</p>
+                <p><strong>Telegram</strong> — <span className="font-mono">t.me/BotFather</span> → create bot → copy token</p>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {keysLoading ? (
