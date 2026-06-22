@@ -46,13 +46,20 @@ async def list_jobs(
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(_get_db),
 ):
-    """List job postings with optional filters."""
-    # Support both page/page_size and limit/offset conventions
+    """List job postings personalized for the current user.
+
+    Jobs are sorted by the user's match score (highest first), then by
+    discovery date. Jobs the user has already rejected are excluded.
+    """
     actual_limit = limit if limit is not None else page_size
     actual_offset = offset if offset is not None else (page - 1) * actual_limit
-    # Build query dynamically
+
     conditions = []
-    params = {"limit": actual_limit, "offset": actual_offset}
+    params: dict = {
+        "uid": user_id,
+        "limit": actual_limit,
+        "offset": actual_offset,
+    }
 
     if status:
         conditions.append("jp.status = :status")
@@ -67,21 +74,33 @@ async def list_jobs(
         conditions.append("(jp.title ILIKE :search OR c.name ILIKE :search2)")
         params["search"] = f"%{search}%"
         params["search2"] = f"%{search}%"
+    if tier:
+        conditions.append("ms.tier = :tier")
+        params["tier"] = tier
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
-    # Count total
-    count_sql = f"SELECT COUNT(*) FROM job_postings jp LEFT JOIN companies c ON jp.company_id = c.id {where}"
-    total = db.execute(text(count_sql), params).scalar() or 0
-
-    # Fetch jobs
-    jobs_sql = f"""
-        SELECT jp.id, jp.title, jp.location, jp.url, jp.source, jp.status,
-               jp.discovered_at, c.name as company_name
+    # Count total (personalized — exclude rejected)
+    count_sql = f"""
+        SELECT COUNT(*)
         FROM job_postings jp
         LEFT JOIN companies c ON jp.company_id = c.id
+        LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid
         {where}
-        ORDER BY jp.discovered_at DESC
+    """
+    total = db.execute(text(count_sql), params).scalar() or 0
+
+    # Fetch jobs sorted by user's match score (highest first), then discovery date
+    jobs_sql = f"""
+        SELECT jp.id, jp.title, jp.location, jp.url, jp.source, jp.status,
+               jp.discovered_at, c.name as company_name,
+               COALESCE(ms.score, 0) as match_score,
+               ms.tier as match_tier
+        FROM job_postings jp
+        LEFT JOIN companies c ON jp.company_id = c.id
+        LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid
+        {where}
+        ORDER BY COALESCE(ms.score, 0) DESC, jp.discovered_at DESC
         LIMIT :limit OFFSET :offset
     """
     rows = db.execute(text(jobs_sql), params).fetchall()
@@ -97,6 +116,8 @@ async def list_jobs(
             "status": row[5],
             "discovered_at": row[6].isoformat() if row[6] else None,
             "company": row[7] or "Unknown",
+            "match_score": row[8] or 0,
+            "match_tier": row[9] or None,
         })
 
     return {"data": jobs, "total": total, "page": (actual_offset // actual_limit) + 1, "page_size": actual_limit}

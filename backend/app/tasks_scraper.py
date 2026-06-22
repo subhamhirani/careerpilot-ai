@@ -29,6 +29,83 @@ def _get_db():
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _build_user_queries(user_id: str | None) -> tuple[list[str], list[str]]:
+    """Build search queries from the user's profile (skills + target roles).
+
+    Falls back to sensible defaults if no profile is found.
+    """
+    default_linkedin = [
+        "software engineer", "network engineer", "infrastructure engineer",
+        "cybersecurity analyst", "SOC analyst", "cloud engineer",
+        "devops engineer", "system administrator",
+    ]
+    default_naukri = [
+        "software engineer", "network engineer", "infrastructure engineer",
+        "cybersecurity", "cloud engineer", "devops",
+        "system administrator", "Windows administrator",
+    ]
+
+    if not user_id:
+        return default_linkedin, default_naukri
+
+    session, engine = _get_db()
+    try:
+        profile_row = session.execute(
+            text(
+                "SELECT skills, target_roles FROM user_profiles WHERE user_id = :uid"
+            ),
+            {"uid": user_id},
+        ).mappings().fetchone()
+
+        if not profile_row:
+            logger.info("No profile for user %s, using default queries", user_id)
+            return default_linkedin, default_naukri
+
+        import json as _json
+
+        skills = []
+        if profile_row.get("skills"):
+            s = profile_row["skills"]
+            if isinstance(s, str):
+                s = _json.loads(s)
+            if isinstance(s, list):
+                skills = [str(x) for x in s if str(x).strip()]
+            elif isinstance(s, dict):
+                for v in s.values():
+                    if isinstance(v, list):
+                        skills.extend(str(x) for x in v if str(x).strip())
+
+        target_roles = []
+        if profile_row.get("target_roles"):
+            r = profile_row["target_roles"]
+            if isinstance(r, str):
+                r = _json.loads(r)
+            if isinstance(r, list):
+                target_roles = [str(x) for x in r if str(x).strip()]
+
+        # Merge and deduplicate: target roles first, then top skills
+        queries = list(dict.fromkeys(target_roles + skills))
+        # Cap at 15 to avoid excessive scraping
+        queries = queries[:15]
+
+        if not queries:
+            return default_linkedin, default_naukri
+
+        logger.info("Built %d user-specific queries for user %s", len(queries), user_id)
+        return queries, queries  # same queries for both portals
+
+    except Exception as exc:
+        logger.warning("Failed to build user queries for %s: %s", user_id, exc)
+        return default_linkedin, default_naukri
+    finally:
+        session.close()
+        engine.dispose()
+
+
+# ---------------------------------------------------------------------------
 # Job Scraping Task
 # ---------------------------------------------------------------------------
 
@@ -41,37 +118,59 @@ def _get_db():
     time_limit=600,
     soft_time_limit=540,
 )
-def scrape_and_store_jobs(self, user_id: str | None = None) -> dict:
+def scrape_and_store_jobs(
+    self,
+    user_id: str | None = None,
+    linkedin_queries: list[str] | None = None,
+    naukri_queries: list[str] | None = None,
+    location: str | None = None,
+) -> dict:
     """Scrape jobs from all portals and store in PostgreSQL.
 
     Args:
-        user_id: Optional user ID to customize queries (uses default if None).
+        user_id: Optional user ID to customize queries from profile.
+        linkedin_queries: Optional custom LinkedIn search queries.
+        naukri_queries: Optional custom Naukri search queries.
+        location: Optional location override. If not provided, uses the
+                  user's preferred_location from profile, or "India".
 
     Returns:
         Dict with counts: total, linkedin, naukri, new_stored.
     """
-    logger.info("scrape_and_store_jobs started (user_id=%s)", user_id)
+    logger.info("scrape_and_store_jobs started (user_id=%s, location=%s)", user_id, location)
 
     try:
         from app.agents.multi_portal_scraper import scrape_all
         import asyncio
 
-        # Default queries (can be customized per user later)
-        linkedin_queries = [
-            "software engineer", "network engineer", "infrastructure engineer",
-            "cybersecurity analyst", "SOC analyst", "cloud engineer",
-            "devops engineer", "system administrator",
-        ]
-        naukri_queries = [
-            "software engineer", "network engineer", "infrastructure engineer",
-            "cybersecurity", "cloud engineer", "devops",
-            "system administrator", "Windows administrator",
-        ]
+        # Resolve location: explicit param → user profile → "India"
+        resolved_location = location
+        if not resolved_location and user_id:
+            try:
+                s, e = _get_db()
+                row = s.execute(
+                    text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
+                    {"uid": user_id},
+                ).mappings().fetchone()
+                if row and row.get("preferred_location"):
+                    resolved_location = row["preferred_location"]
+                s.close()
+                e.dispose()
+            except Exception:
+                pass
+        resolved_location = resolved_location or "India"
+
+        # Use custom queries if provided, otherwise build from user profile
+        if linkedin_queries or naukri_queries:
+            li_q = linkedin_queries or []
+            na_q = naukri_queries or li_q
+        else:
+            li_q, na_q = _build_user_queries(user_id)
 
         result = asyncio.run(scrape_all(
-            linkedin_queries=linkedin_queries,
-            naukri_queries=naukri_queries,
-            location="India",
+            linkedin_queries=li_q,
+            naukri_queries=na_q,
+            location=resolved_location,
         ))
 
         jobs = result["jobs"]
@@ -123,6 +222,18 @@ def scrape_and_store_jobs(self, user_id: str | None = None) -> dict:
             "scrape_and_store_jobs completed: %d total, %d new stored",
             summary["total_jobs"], new_count,
         )
+
+        # Auto-trigger relevance scoring for the user
+        if user_id and new_count > 0:
+            try:
+                from app.tasks_scraper import run_relevance_scoring
+                score_task = run_relevance_scoring.delay(user_id=user_id)
+                logger.info(
+                    "Auto-triggered scoring for user %s after scrape: task %s",
+                    user_id, score_task.id,
+                )
+            except Exception as score_err:
+                logger.warning("Auto-trigger scoring failed: %s", score_err)
 
         return {
             "total_scraped": summary["total_jobs"],

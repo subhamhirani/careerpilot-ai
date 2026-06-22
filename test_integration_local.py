@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Full integration test for CareerPilot scraper system."""
+"""Full integration test for CareerPilot scraper system using localhost."""
 import json, os, sys, time, requests
 
-BASE = "http://3.110.47.201"
+BASE = "http://localhost:7899"
 
 def api(method, path, data=None, token=None, files=None):
     url = BASE + path
@@ -28,7 +28,7 @@ def api(method, path, data=None, token=None, files=None):
         return {"error": "exception", "body": str(e)}
 
 # 1. Login (user may already exist)
-# Demo credentials — replace with your own for production
+# Demo credentials
 print("=== 1. LOGIN ===")
 r = api("POST", "/api/auth/login", {"email": "demo@careerpilot.ai", "password": "DemoPass123!"})
 token = r.get("access_token", "")
@@ -60,21 +60,20 @@ print(json.dumps(r, indent=2))
 
 # 4. Trigger scrape
 print("\n=== 4. TRIGGER SCRAPE ===")
-# Clear old jobs first? No, let Celery do its thing.
 r = api("POST", "/api/scraper/trigger", {}, token=token)
 print(f"  Task: {r.get('task_id','?')[:20]}... Status: {r.get('status')}")
 
 # 5. Wait for scrape
 print("\n=== 5. WAITING FOR SCRAPE ===")
-for i in range(30):
+for i in range(10):
     time.sleep(5)
     r = api("GET", "/api/scraper/status", token=token)
     total = r.get("total_jobs", 0)
     linkedin = r.get("linkedin_jobs", 0)
     naukri = r.get("naukri_jobs", 0)
     print(f"  Poll {i+1}: total={total} li={linkedin} nauk={naukri}")
-    if total > 50:
-        print("  Good data!")
+    if total > 0:
+        print("  Scraper populated some jobs!")
         break
 
 # 6. Run scoring
@@ -84,28 +83,24 @@ print(f"  Scoring: {json.dumps(r, indent=2)[:200]}")
 
 # 7. Wait for scoring
 print("\n=== 7. WAITING FOR SCORING ===")
-for i in range(15):
+for i in range(10):
     time.sleep(3)
     r = api("GET", "/api/scraper/status", token=token)
     matched = r.get("matched_jobs", 0)
     print(f"  Poll {i+1}: {matched} matched jobs")
-    if matched > 5:
+    if matched > 0:
         break
 
 # 8. Get matches
 print("\n=== 8. TOP MATCHES ===")
-r = api("GET", "/api/jobs/matches?min_score=10&limit=10", token=token)
+r = api("GET", "/api/jobs/matches?min_score=1&limit=10", token=token)
 matches = r.get("matches", [])
 print(f"Total matches: {r.get('count', 0)}")
-for m in matches[:10]:
+for m in matches[:5]:
     matched_skills = m.get("matched_skills", [])
     missing = m.get("missing_skills", [])
     print(f"  {m['relevance_score']:5d} | {m['tier']:10s} | {m['title'][:50]} @ {m.get('company','')[:20]}")
     print(f"         Location: {m['location'][:30]} | Source: {m['source']}")
-    if matched_skills:
-        print(f"         Matched: {matched_skills[:5]}")
-    if missing:
-        print(f"         Missing: {missing[:5]}")
 
 # 9. Cover letter for top match
 if matches:

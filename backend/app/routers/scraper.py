@@ -38,7 +38,7 @@ def _get_db():
 class TriggerScrapeRequest(BaseModel):
     linkedin_queries: Optional[list[str]] = None
     naukri_queries: Optional[list[str]] = None
-    location: str = "India"
+    location: Optional[str] = None  # None = use user's preferred_location from profile
 
     class Config:
         # Allow empty body
@@ -76,10 +76,25 @@ async def trigger_scrape(
     request: TriggerScrapeRequest = Body(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Trigger a manual job scrape."""
+    """Trigger a manual job scrape.
+
+    If custom queries (linkedin_queries / naukri_queries) are provided they
+    are used; otherwise the task builds queries from the user's profile.
+    After scraping completes, relevance scoring is triggered automatically.
+    """
     from app.tasks_scraper import scrape_and_store_jobs
 
-    task = scrape_and_store_jobs.delay(user_id=user_id)
+    # If the user supplied custom queries, pass them through via kwargs
+    kwargs: dict = {"user_id": user_id}
+    if request is not None:
+        if request.linkedin_queries:
+            kwargs["linkedin_queries"] = request.linkedin_queries
+        if request.naukri_queries:
+            kwargs["naukri_queries"] = request.naukri_queries
+        if request.location:
+            kwargs["location"] = request.location
+
+    task = scrape_and_store_jobs.delay(**kwargs)
     return {"task_id": task.id, "status": "started"}
 
 

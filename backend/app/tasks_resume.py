@@ -201,7 +201,17 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
             )
         session.commit()
 
-        # ── Step 5: Done ────────────────────────────────────────
+        # ── Step 5: Auto-trigger relevance scoring ───────────────
+        _update_status(session, process_id, progress_pct=90, current_step="Computing personalized job matches...")
+
+        try:
+            from app.tasks_scraper import run_relevance_scoring
+            score_result = run_relevance_scoring.delay(user_id=user_id)
+            logger.info("Auto-triggered relevance scoring for user %s: task %s", user_id, score_result.id)
+        except Exception as score_err:
+            logger.warning("Failed to auto-trigger scoring for user %s: %s", user_id, score_err)
+
+        # ── Step 6: Done ────────────────────────────────────────
         _update_status(
             session,
             process_id,

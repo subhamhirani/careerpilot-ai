@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useDashboardStore } from '@/lib/store';
 import { StatsCard } from '@/components/stats-card';
@@ -11,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/lib/auth-context';
 import {
   Briefcase,
   Send,
@@ -106,8 +108,13 @@ function ScraperStatusCard() {
     queryFn: () => api.get<DashboardStats>('/dashboard/stats'),
   });
 
+  const [scrapeLocation, setScrapeLocation] = useState('');
+
   const triggerScrape = useMutation({
-    mutationFn: () => api.post('/scraper/trigger', {}),
+    mutationFn: () =>
+      api.post('/scraper/trigger', {
+        location: scrapeLocation.trim() || undefined,
+      }),
     onSuccess: () => {
       toast.success('Scrape triggered');
       setTimeout(() => refetch(), 5000);
@@ -131,15 +138,24 @@ function ScraperStatusCard() {
           <RefreshCw className={`h-4 w-4 text-primary ${s.is_scraping ? 'animate-spin' : ''}`} />
           Job Scraper
         </CardTitle>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => triggerScrape.mutate()}
-          disabled={triggerScrape.isPending || s.is_scraping}
-        >
-          <Loader2 className={`h-3 w-3 mr-1 ${triggerScrape.isPending ? 'animate-spin' : ''}`} />
-          {triggerScrape.isPending ? 'Scraping...' : 'Scrape Now'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Location (e.g. Bangalore)"
+            value={scrapeLocation}
+            onChange={(e) => setScrapeLocation(e.target.value)}
+            className="h-8 w-40 text-xs rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => triggerScrape.mutate()}
+            disabled={triggerScrape.isPending || s.is_scraping}
+          >
+            <Loader2 className={`h-3 w-3 mr-1 ${triggerScrape.isPending ? 'animate-spin' : ''}`} />
+            {triggerScrape.isPending ? 'Scraping...' : 'Scrape Now'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-2">
@@ -178,7 +194,17 @@ function ScraperStatusCard() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const { stats, setStats, loading, setLoading } = useDashboardStore();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    const token = localStorage.getItem('careerpilot_token');
+    if (!token) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
