@@ -19,23 +19,21 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __app_name__, __version__
 from .auth import get_current_user_id
-from .routers import scraper, auth, resumes, jobs, matches, approvals, applications, dashboard, settings, process_status
+from .routers import scraper, auth, resumes, jobs, matches, approvals, applications, dashboard, settings, process_status, notifications, user_profile, resume_parsing, cover_letters, onboarding
 from .routers.resumes import upload_resume
 from .telemetry import log_event
 
 # ── Load .env before anything else ───────────────────────────
 load_dotenv()
 
-# ── Lifespan ─────────────────────────────────────────────────
 
+# ── Lifespan ─────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup / shutdown lifecycle."""
-    # ── Startup ───────────────────────────────────────────────
     # (Database connection pool, model loading, etc. go here)
     yield
-    # ── Shutdown ──────────────────────────────────────────────
     # (Cleanup goes here)
 
 
@@ -48,23 +46,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS ─────────────────────────────────────────────────────
+# ── CORS (must be added BEFORE routers) ──────────────────────
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    log_event("request", {"path": request.url.path, "method": request.method})
-    return await call_next(request)
-
-app.include_router(scraper.router, prefix="/api")
-app.include_router(auth.router, prefix="/api")
-app.include_router(resumes.router, prefix="/api")
-app.include_router(jobs.router, prefix="/api")
-app.include_router(matches.router, prefix="/api")
-app.include_router(approvals.router, prefix="/api")
-app.include_router(applications.router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")
-app.include_router(settings.router, prefix="/api")
-app.include_router(process_status.router, prefix="/api")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
@@ -72,6 +55,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Request logging middleware ────────────────────────────────
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    log_event("request", {"path": request.url.path, "method": request.method})
+    return await call_next(request)
+
+# ── Routers (order matters: more specific routes first) ──────
+# onboarding before jobs so /onboarding/status doesn't match /jobs/{job_id}
+app.include_router(onboarding.router, prefix="/api")
+app.include_router(scraper.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(resumes.router, prefix="/api")
+app.include_router(cover_letters.router, prefix="/api")
+app.include_router(applications.router, prefix="/api")
+app.include_router(approvals.router, prefix="/api")
+app.include_router(matches.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
+app.include_router(process_status.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(user_profile.router, prefix="/api")
+app.include_router(resume_parsing.router, prefix="/api")
 
 # ── Static files ─────────────────────────────────────────────
 

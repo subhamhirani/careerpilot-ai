@@ -8,4 +8,10 @@ __all__ = [
     "dashboard",
     "settings",
     "process_status",
+    "notifications",
+    "user_profile",
+    "resume_parsing",
+    "cover_letters",
+    "onboarding",
+    "scraper",
 ]

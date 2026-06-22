@@ -24,7 +24,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { Job } from '@/types';
+import { toast } from 'sonner';
+import type { Job, CoverLetter } from '@/types';
 
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -46,6 +47,7 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [isApplying, setIsApplying] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['job', params.id],
@@ -60,6 +62,22 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
     },
     onError: () => {
       setIsApplying(false);
+    },
+  });
+
+  const coverLetterMutation = useMutation({
+    mutationFn: () => api.post<CoverLetter>('/cover-letters/generate', {
+      job_posting_id: params.id,
+      tone: 'professional',
+    }),
+    onSuccess: (data) => {
+      setIsGenerating(false);
+      toast.success('Cover letter generated!');
+      router.push(`/jobs/${params.id}?tab=cover-letter`);
+    },
+    onError: (err) => {
+      setIsGenerating(false);
+      toast.error(err instanceof Error ? err.message : 'Failed to generate cover letter');
     },
   });
 
@@ -232,8 +250,18 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
                   Tailor Resume
                 </Link>
               </Button>
-              <Button className="w-full" variant="outline" size="sm">
-                Generate Cover Letter
+              <Button
+                className="w-full"
+                variant="outline"
+                size="sm"
+                disabled={isGenerating}
+                onClick={() => {
+                  setIsGenerating(true);
+                  coverLetterMutation.mutate();
+                }}
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                {isGenerating ? 'Generating...' : 'Generate Cover Letter'}
               </Button>
             </CardContent>
           </Card>

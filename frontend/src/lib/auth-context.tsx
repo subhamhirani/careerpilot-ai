@@ -69,6 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setUser({ user_id: '', email });
     }
+    // Redirect new users to onboarding
+    if (data.is_new_user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/onboarding';
+      }
+    }
   }, []);
 
   const register = useCallback(async (email: string, password: string, fullName?: string) => {
@@ -80,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user_id: data.user_id as string,
       email: data.email as string || email,
     });
+    // New users go to onboarding
+    if (typeof window !== 'undefined') {
+      window.location.href = '/onboarding';
+    }
   }, []);
 
   const logout = useCallback(() => {

@@ -205,3 +205,50 @@ export interface MatchScoreBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
 }
+
+// --- Notification ---
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'job_match' | 'application_update' | 'approval_needed' | 'cover_letter_generated' | 'resume_parsed' | 'scraper_complete' | 'system';
+  title: string;
+  message: string;
+  is_read: boolean;
+  entity_type?: string;
+  entity_id?: string;
+  created_at: string;
+}
+
+// --- User Profile ---
+
+export interface UserProfile {
+  id: string | null;
+  user_id: string;
+  full_name: string;
+  phone: string;
+  headline: string;
+  summary: string;
+  skills: string[];
+  experience: any[];
+  education: any[];
+  certifications: any[];
+  linkedin_url: string;
+  github_url: string;
+  portfolio_url: string;
+  preferred_location: string;
+  preferred_roles: string[];
+}
+
+// --- Cover Letter ---
+
+export interface CoverLetter {
+  id: string;
+  job_posting_id: string | null;
+  title: string;
+  content: string;
+  tone: string;
+  word_count: number;
+  is_approved: boolean;
+  created_at: string | null;
+}

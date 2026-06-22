@@ -31,6 +31,12 @@ def _get_db():
         engine.dispose()
 
 
+def _to_uuid(value) -> uuid.UUID:
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
 @router.get("/")
 async def list_pending_approvals(
     status: str | None = "pending",
@@ -40,8 +46,9 @@ async def list_pending_approvals(
     db: Session = Depends(_get_db),
 ):
     """List all pending approvals awaiting user action."""
+    uid = _to_uuid(user_id)
     conditions = ["pa.user_id = :uid"]
-    params = {"uid": uuid.UUID(user_id), "limit": limit, "offset": offset}
+    params = {"uid": uid, "limit": limit, "offset": offset}
 
     if status:
         conditions.append("pa.status = :status")
@@ -55,7 +62,7 @@ async def list_pending_approvals(
     rows = db.execute(
         text(f"""
             SELECT pa.id, pa.entity_type, pa.entity_id, pa.status,
-                   pa.created_at, pa.match_score,
+                   pa.created_at,
                    jp.title, jp.location, c.name as company_name
             FROM pending_approvals pa
             LEFT JOIN job_postings jp ON pa.entity_id = jp.id
@@ -75,10 +82,9 @@ async def list_pending_approvals(
             "entity_id": str(row[2]),
             "status": row[3],
             "created_at": row[4].isoformat() if row[4] else None,
-            "match_score": row[5],
-            "job_title": row[6],
-            "job_location": row[7],
-            "company": row[8] or "Unknown",
+            "job_title": row[5],
+            "job_location": row[6],
+            "company": row[7] or "Unknown",
         })
 
     return {"approvals": approvals, "total": total, "limit": limit, "offset": offset}
@@ -91,15 +97,17 @@ async def approve_application(
     db: Session = Depends(_get_db),
 ):
     """Approve an application and trigger submission."""
+    uid = _to_uuid(user_id)
+
     # Update approval status
     result = db.execute(
         text("""
             UPDATE pending_approvals
-            SET status = 'approved', decided_at = NOW()
+            SET status = 'approved', reviewed_at = NOW()
             WHERE id = :aid AND user_id = :uid AND status = 'pending'
             RETURNING entity_id, entity_type
         """),
-        {"aid": approval_id, "uid": uuid.UUID(user_id)},
+        {"aid": _to_uuid(approval_id), "uid": uid},
     ).fetchone()
 
     if not result:
@@ -111,9 +119,9 @@ async def approve_application(
     db.execute(
         text("""
             INSERT INTO applications (id, user_id, job_posting_id, status, method)
-            VALUES (:aid, :uid, :jid, 'pending', 'automated')
+            VALUES (:aid, :uid, :jid, 'draft', 'automated')
         """),
-        {"aid": app_id, "uid": uuid.UUID(user_id), "jid": job_id},
+        {"aid": app_id, "uid": uid, "jid": job_id},
     )
     db.commit()
 
@@ -135,10 +143,10 @@ async def reject_application(
     result = db.execute(
         text("""
             UPDATE pending_approvals
-            SET status = 'rejected', decided_at = NOW()
+            SET status = 'rejected', reviewed_at = NOW()
             WHERE id = :aid AND user_id = :uid AND status = 'pending'
         """),
-        {"aid": approval_id, "uid": uuid.UUID(user_id)},
+        {"aid": _to_uuid(approval_id), "uid": _to_uuid(user_id)},
     )
 
     if result.rowcount == 0:

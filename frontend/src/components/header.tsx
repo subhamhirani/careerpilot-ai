@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Menu, Bell, Rocket, LogOut, User } from 'lucide-react';
 import { useUIStore } from '@/lib/store';
+import { NotificationBell } from '@/components/notification-bell';
 
 export function Header() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
@@ -41,10 +42,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </Button>
+          <NotificationBell />
           <ThemeToggle />
           {isAuthenticated ? (
             <DropdownMenu>

@@ -18,6 +18,8 @@ import {
   Rocket,
   X,
   Activity,
+  Bell,
+  UserCircle,
 } from 'lucide-react';
 
 const navItems = [
@@ -27,6 +29,8 @@ const navItems = [
   { href: '/approvals', label: 'Approvals', icon: CheckSquare },
   { href: '/applications', label: 'Applications', icon: Send },
   { href: '/resumes', label: 'Resumes', icon: FileText },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/profile', label: 'Profile', icon: UserCircle },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

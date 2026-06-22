@@ -145,10 +145,33 @@ async def login(body: LoginRequest):
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
 
+    # Determine if this is a first-time login (no profile, no resumes)
+    is_new_user = True
+    try:
+        import os
+        from sqlalchemy import create_engine, text as _text
+        dsn = os.getenv("DATABASE_URL", "")
+        if dsn:
+            sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+            chk_engine = create_engine(sync_dsn)
+            try:
+                with chk_engine.connect() as conn:
+                    prof = conn.execute(
+                        _text("SELECT 1 FROM user_profiles WHERE user_id = :uid"),
+                        {"uid": user_id},
+                    ).fetchone()
+                    if prof:
+                        is_new_user = False
+            finally:
+                chk_engine.dispose()
+    except Exception:
+        pass
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "is_new_user": is_new_user,
     }
 
 

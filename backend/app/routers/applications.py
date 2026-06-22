@@ -31,6 +31,12 @@ def _get_db():
         engine.dispose()
 
 
+def _to_uuid(value) -> uuid.UUID:
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
 @router.get("/")
 async def list_applications(
     status: str | None = None,
@@ -40,8 +46,9 @@ async def list_applications(
     db: Session = Depends(_get_db),
 ):
     """List all submitted applications with status tracking."""
+    uid = _to_uuid(user_id)
     conditions = ["a.user_id = :uid"]
-    params = {"uid": uuid.UUID(user_id), "limit": limit, "offset": offset}
+    params = {"uid": uid, "limit": limit, "offset": offset}
 
     if status:
         conditions.append("a.status = :status")
@@ -102,15 +109,15 @@ async def get_application(
         text("""
             SELECT a.id, a.job_posting_id, a.status, a.method,
                    a.screenshot_before, a.screenshot_after,
-                   a.confirmation_id, a.error_message,
-                   a.created_at, a.updated_at,
+                   a.confirmation_id,
+                   a.applied_at,
                    jp.title, jp.location, jp.url, c.name as company_name
             FROM applications a
             JOIN job_postings jp ON a.job_posting_id = jp.id
             LEFT JOIN companies c ON jp.company_id = c.id
             WHERE a.id = :aid AND a.user_id = :uid
         """),
-        {"aid": application_id, "uid": uuid.UUID(user_id)},
+        {"aid": _to_uuid(application_id), "uid": _to_uuid(user_id)},
     ).fetchone()
 
     if not row:
@@ -124,14 +131,12 @@ async def get_application(
         "screenshot_before": row[4],
         "screenshot_after": row[5],
         "confirmation_id": row[6],
-        "error_message": row[7],
-        "created_at": row[8].isoformat() if row[8] else None,
-        "updated_at": row[9].isoformat() if row[9] else None,
+        "applied_at": row[7].isoformat() if row[7] else None,
         "job": {
-            "title": row[10],
-            "location": row[11],
-            "url": row[12],
-            "company": row[13] or "Unknown",
+            "title": row[8],
+            "location": row[9],
+            "url": row[10],
+            "company": row[11] or "Unknown",
         },
     }
 
@@ -152,7 +157,7 @@ async def application_stats(user_id: str = Depends(get_current_user_id), db: Ses
             FROM applications
             WHERE user_id = :uid
         """),
-        {"uid": uuid.UUID(user_id)},
+        {"uid": _to_uuid(user_id)},
     ).fetchone()
 
     return {
