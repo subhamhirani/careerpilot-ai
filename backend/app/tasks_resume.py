@@ -201,15 +201,21 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
             )
         session.commit()
 
-        # ── Step 5: Auto-trigger relevance scoring ───────────────
-        _update_status(session, process_id, progress_pct=90, current_step="Computing personalized job matches...")
+        # ── Step 5: Auto-trigger user-specific scrape + scoring ────
+        _update_status(session, process_id, progress_pct=90, current_step="Scraping jobs based on your profile...")
 
         try:
-            from app.tasks_scraper import run_relevance_scoring
+            from app.tasks_scraper import scrape_and_store_jobs, run_relevance_scoring
+
+            # First: trigger a user-specific scrape based on their profile
+            scrape_result = scrape_and_store_jobs.delay(user_id=user_id)
+            logger.info("Auto-triggered user scrape for user %s: task %s", user_id, scrape_result.id)
+
+            # Then: trigger scoring (will run after scrape completes via auto-trigger in task)
             score_result = run_relevance_scoring.delay(user_id=user_id)
             logger.info("Auto-triggered relevance scoring for user %s: task %s", user_id, score_result.id)
         except Exception as score_err:
-            logger.warning("Failed to auto-trigger scoring for user %s: %s", user_id, score_err)
+            logger.warning("Failed to auto-trigger scrape/score for user %s: %s", user_id, score_err)
 
         # ── Step 6: Done ────────────────────────────────────────
         _update_status(

@@ -90,6 +90,22 @@ async def list_jobs(
     """
     total = db.execute(text(count_sql), params).scalar() or 0
 
+    # Check if user has any match scores — if not, trigger background scrape+score
+    has_scores = db.execute(
+        text("SELECT EXISTS(SELECT 1 FROM match_scores WHERE user_id = :uid)"),
+        {"uid": user_id}
+    ).scalar()
+
+    if not has_scores:
+        # Trigger background scrape + scoring based on user profile
+        # Throttled: only if no scrape ran in the last 30 min (source='linkedin' with user-specific queries)
+        try:
+            from app.tasks_scraper import scrape_and_store_jobs, run_relevance_scoring
+            scrape_and_store_jobs.delay(user_id=user_id)
+            run_relevance_scoring.delay(user_id=user_id)
+        except Exception:
+            pass  # Non-blocking — user will see global pool until scoring completes
+
     # Fetch jobs sorted by user's match score (highest first), then discovery date
     jobs_sql = f"""
         SELECT jp.id, jp.title, jp.location, jp.url, jp.source, jp.status,
