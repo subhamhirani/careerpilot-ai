@@ -34,8 +34,12 @@ app = Celery(
     "careerpilot",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["app.tasks", "app.tasks_resume", "app.tasks_scraper"],
 )
+
+app.autodiscover_tasks([
+    "app.tasks_scraper",
+    "app.tasks_resume",
+])
 
 # ---------------------------------------------------------------------------
 # Settings
