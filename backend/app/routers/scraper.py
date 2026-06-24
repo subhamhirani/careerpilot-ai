@@ -93,10 +93,7 @@ async def trigger_scrape(
             kwargs["naukri_queries"] = request.naukri_queries
         if request.location:
             kwargs["location"] = request.location
-        if request.location:
-            kwargs["location"] = request.location
 
-    print(f"DEBUG trigger_scrape: kwargs={kwargs}")
     task = scrape_and_store_jobs.delay(**kwargs)
     return {"task_id": task.id, "status": "started"}
 
