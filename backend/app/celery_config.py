@@ -30,22 +30,21 @@ RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", RESULT_DEFAULT)
 # App instance
 # ---------------------------------------------------------------------------
 
-app = Celery(
+celery_app = Celery(
     "careerpilot",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
 )
 
-app.autodiscover_tasks([
-    "app.tasks_scraper",
-    "app.tasks_resume",
-])
+# Explicitly import task modules so Celery registers them.
+import app.tasks_scraper  # noqa: F401
+import app.tasks_resume   # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
 
-app.conf.update(
+celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
@@ -62,7 +61,7 @@ app.conf.update(
 # Celery Beat Schedule (times in UTC; IST = UTC + 5:30)
 # ---------------------------------------------------------------------------
 
-app.conf.beat_schedule = {
+celery_app.conf.beat_schedule = {
     "discover-jobs": {
         "task": "app.tasks.discover_jobs",
         "schedule": crontab(
@@ -102,7 +101,7 @@ app.conf.beat_schedule = {
 # ---------------------------------------------------------------------------
 
 
-@app.task(bind=True, max_retries=3)
+@celery_app.task(bind=True, max_retries=3)
 def debug_task(self) -> str:
     """Simple debug task to verify Celery is working."""
     return f"Request: {self.request!r}"

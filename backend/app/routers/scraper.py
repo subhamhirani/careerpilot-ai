@@ -84,7 +84,7 @@ async def trigger_scrape(
     """
     from app.tasks_scraper import scrape_and_store_jobs
 
-    # If the user supplied custom queries, pass them through via kwargs
+    # If the user supplied custom queries or location, pass them through via kwargs
     kwargs: dict = {"user_id": user_id}
     if request is not None:
         if request.linkedin_queries:
@@ -93,7 +93,10 @@ async def trigger_scrape(
             kwargs["naukri_queries"] = request.naukri_queries
         if request.location:
             kwargs["location"] = request.location
+        if request.location:
+            kwargs["location"] = request.location
 
+    print(f"DEBUG trigger_scrape: kwargs={kwargs}")
     task = scrape_and_store_jobs.delay(**kwargs)
     return {"task_id": task.id, "status": "started"}
 

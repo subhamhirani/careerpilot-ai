@@ -89,9 +89,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A app.celery_config.app worker --loglevel=info --concurrency=2
+    command: celery -A app.celery_config.celery_app worker --loglevel=info --concurrency=2
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.celery_config.app inspect ping || exit 1"]
+      test: ["CMD-SHELL", "celery -A app.celery_config.celery_app inspect ping || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -114,9 +114,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A app.celery_config.app beat --loglevel=info
+    command: celery -A app.celery_config.celery_app beat --loglevel=info
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.celery_config.app inspect ping || exit 1"]
+      test: ["CMD-SHELL", "celery -A app.celery_config.celery_app inspect ping || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
