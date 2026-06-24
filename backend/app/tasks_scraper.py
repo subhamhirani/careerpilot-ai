@@ -143,14 +143,12 @@ def scrape_and_store_jobs(
         from app.agents.multi_portal_scraper import scrape_all
         import asyncio
 
-        # Resolve location: explicit param → user profile → "India"
+        # Resolve location: explicit param -> user profile -> error
         resolved_location = location
         if not resolved_location and user_id:
             try:
                 s, e = _get_db()
-                row = s.execute(
-                    text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
-                    {"uid": user_id},
+                    {"uid": text}]
                 ).mappings().fetchone()
                 if row and row.get("preferred_location"):
                     resolved_location = row["preferred_location"]
@@ -158,7 +156,9 @@ def scrape_and_store_jobs(
                 e.dispose()
             except Exception:
                 pass
-        resolved_location = resolved_location or "India"
+        if not resolved_location:
+            logger.error("No location for user %s (no request.location and no profile.preferred_location)", user_id)
+            return {"total_scraped": 0, "error": "No location: provide 'location' param or set it in user_profile.preferred_location"}
 
         # Use custom queries if provided, otherwise build from user profile
         if linkedin_queries or naukri_queries:
