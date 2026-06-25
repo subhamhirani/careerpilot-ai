@@ -197,14 +197,21 @@ export default function DashboardPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { stats, setStats, loading, setLoading } = useDashboardStore();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Redirect to login if not authenticated - checked immediately
-  const token = typeof window !== 'undefined' ? localStorage.getItem('careerpilot_token') : null;
-  if (!token) {
-    if (typeof window !== 'undefined') {
+  // Check authentication and redirect BEFORE rendering dashboard
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('careerpilot_token') : null;
+    if (!token) {
       router.push('/login');
+      return;
     }
-    return null; // Don't render anything during redirect
+    setIsCheckingAuth(false);
+  }, [router]);
+
+  // Show nothing while checking auth or redirecting
+  if (!isAuthenticated || isCheckingAuth) {
+    return null;
   }
 
   const { data, isLoading } = useQuery({
