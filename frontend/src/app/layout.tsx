@@ -1,12 +1,22 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import { Header } from '@/components/header';
 import { Sidebar } from '@/components/sidebar';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+// Taste Skill Typography: Professional sans-serif (Geist) + Mono for code
+const geistSans = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+  display: 'swap',
+});
 
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+  display: 'swap',
+});
 export const metadata: Metadata = {
   title: 'CareerPilot AI — Automated Job Application System',
   description: 'AI-powered job search and automated application system. Find, match, and apply to jobs intelligently.',
@@ -20,7 +30,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         <Providers>
           <div className="flex min-h-screen">
             <Sidebar />

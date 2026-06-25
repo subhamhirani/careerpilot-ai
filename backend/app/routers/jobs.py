@@ -80,10 +80,11 @@ async def list_jobs(
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
-    # Count total (personalized — exclude rejected)
+    # Count total (personalized — only jobs mapped to this user)
     count_sql = f"""
         SELECT COUNT(*)
         FROM job_postings jp
+        INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
         LEFT JOIN companies c ON jp.company_id = c.id
         LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid
         {where}
@@ -98,13 +99,18 @@ async def list_jobs(
 
     if not has_scores:
         # Trigger background scrape + scoring based on user profile
-        # Throttled: only if no scrape ran in the last 30 min (source='linkedin' with user-specific queries)
         try:
             from app.tasks_scraper import scrape_and_store_jobs, run_relevance_scoring
-            scrape_and_store_jobs.delay(user_id=user_id)
+            # Get user's preferred location for scraping
+            loc_row = db.execute(
+                text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
+                {"uid": user_id}
+            ).mappings().fetchone()
+            scrape_location = loc_row.get("preferred_location") if loc_row else None
+            scrape_and_store_jobs.delay(user_id=user_id, location=scrape_location)
             run_relevance_scoring.delay(user_id=user_id)
         except Exception:
-            pass  # Non-blocking — user will see global pool until scoring completes
+            pass  # Non-blocking — user will see their jobs once scoring completes
 
     # Fetch jobs sorted by user's match score (highest first), then discovery date
     jobs_sql = f"""
@@ -113,6 +119,7 @@ async def list_jobs(
                COALESCE(ms.score, 0) as match_score,
                ms.tier as match_tier
         FROM job_postings jp
+        INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
         LEFT JOIN companies c ON jp.company_id = c.id
         LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid
         {where}
@@ -141,17 +148,19 @@ async def list_jobs(
 
 @router.get("/{job_id}")
 async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
-    """Get a specific job posting with match details."""
+    """Get a specific job posting with match details (only if mapped to this user)."""
+    # Verify user owns this job via user_jobs mapping
     row = db.execute(
         text("""
             SELECT jp.id, jp.title, jp.description, jp.location, jp.url, jp.source,
                    jp.salary_min, jp.salary_max, jp.posted_at, jp.discovered_at,
                    jp.status, c.name as company_name
             FROM job_postings jp
+            INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
             LEFT JOIN companies c ON jp.company_id = c.id
             WHERE jp.id = :jid
         """),
-        {"jid": job_id},
+        {"jid": job_id, "uid": user_id},
     ).fetchone()
 
     if not row:

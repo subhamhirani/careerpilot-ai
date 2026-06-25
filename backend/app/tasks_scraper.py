@@ -148,7 +148,9 @@ def scrape_and_store_jobs(
         if not resolved_location and user_id:
             try:
                 s, e = _get_db()
-                    {"uid": text}]
+                row = s.execute(
+                    text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
+                    {"uid": user_id},
                 ).mappings().fetchone()
                 if row and row.get("preferred_location"):
                     resolved_location = row["preferred_location"]
@@ -191,7 +193,7 @@ def scrape_and_store_jobs(
                     continue
 
                 # Insert new job posting
-                session.execute(
+                result = session.execute(
                     text(
                         """
                         INSERT INTO job_postings
@@ -200,6 +202,7 @@ def scrape_and_store_jobs(
                         VALUES
                             (:title, :location, :desc, :url, :source,
                              :hk, 'new', NOW())
+                        RETURNING id
                         """
                     ),
                     {
@@ -211,7 +214,21 @@ def scrape_and_store_jobs(
                         "hk": job.get("hash_key", ""),
                     },
                 )
+                new_job_id = result.scalar()
                 new_count += 1
+
+                # Map job to user for per-user isolation
+                if user_id and new_job_id:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO user_jobs (user_id, job_posting_id, status)
+                            VALUES (:uid, :jid, 'new')
+                            ON CONFLICT (user_id, job_posting_id) DO NOTHING
+                            """
+                        ),
+                        {"uid": user_id, "jid": new_job_id},
+                    )
 
             session.commit()
         finally:
