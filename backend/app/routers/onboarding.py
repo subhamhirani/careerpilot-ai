@@ -280,8 +280,8 @@ async def quick_setup_profile(
                 )
             else:
                 pid = str(uuid.uuid4())
-                cols = ["id", "user_id", "raw_json"] + list(data.keys())
-                params = {"id": pid, "user_id": uid, "raw_json": "{}", **data}
+                cols = ["id", "user_id"] + list(data.keys())
+                params = {"id": pid, "user_id": uid, **data}
                 col_str = ", ".join(cols)
                 val_str = ", ".join(f":{c}" for c in cols)
                 conn.execute(

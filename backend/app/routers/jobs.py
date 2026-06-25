@@ -62,10 +62,10 @@ async def list_jobs(
     }
 
     if status:
-        conditions.append("jp.status = :status")
+        conditions.append("uj.status = :status")
         params["status"] = status
     if source:
-        conditions.append("jp.source = :source")
+        conditions.append("jp.source_platform = :source")
         params["source"] = source
     if location:
         conditions.append("jp.location ILIKE :location")
@@ -75,7 +75,7 @@ async def list_jobs(
         params["search"] = f"%{search}%"
         params["search2"] = f"%{search}%"
     if tier:
-        conditions.append("ms.tier = :tier")
+        conditions.append("ms.grade = :tier")
         params["tier"] = tier
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
@@ -114,16 +114,16 @@ async def list_jobs(
 
     # Fetch jobs sorted by user's match score (highest first), then discovery date
     jobs_sql = f"""
-        SELECT jp.id, jp.title, jp.location, jp.url, jp.source, jp.status,
-               jp.discovered_at, c.name as company_name,
-               COALESCE(ms.score, 0) as match_score,
-               ms.tier as match_tier
+        SELECT jp.id, jp.title, jp.location, jp.source_url, jp.source_platform,
+               jp.posted_at, c.name as company_name,
+               COALESCE(ms.overall_score, 0) as match_score,
+               ms.grade as match_tier
         FROM job_postings jp
         INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
         LEFT JOIN companies c ON jp.company_id = c.id
         LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid
         {where}
-        ORDER BY COALESCE(ms.score, 0) DESC, jp.discovered_at DESC
+        ORDER BY COALESCE(ms.overall_score, 0) DESC, jp.posted_at DESC
         LIMIT :limit OFFSET :offset
     """
     rows = db.execute(text(jobs_sql), params).fetchall()
@@ -136,11 +136,10 @@ async def list_jobs(
             "location": row[2],
             "url": row[3],
             "source": row[4],
-            "status": row[5],
-            "discovered_at": row[6].isoformat() if row[6] else None,
-            "company": row[7] or "Unknown",
-            "match_score": row[8] or 0,
-            "match_tier": row[9] or None,
+            "discovered_at": row[5].isoformat() if row[5] else None,
+            "company": row[6] or "Unknown",
+            "match_score": row[7] or 0,
+            "match_tier": row[8] or None,
         })
 
     return {"data": jobs, "total": total, "page": (actual_offset // actual_limit) + 1, "page_size": actual_limit}
@@ -152,9 +151,9 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
     # Verify user owns this job via user_jobs mapping
     row = db.execute(
         text("""
-            SELECT jp.id, jp.title, jp.description, jp.location, jp.url, jp.source,
-                   jp.salary_min, jp.salary_max, jp.posted_at, jp.discovered_at,
-                   jp.status, c.name as company_name
+            SELECT jp.id, jp.title, jp.description, jp.location, jp.source_url, jp.source_platform,
+                   jp.salary_min, jp.salary_max, jp.posted_at,
+                   c.name as company_name
             FROM job_postings jp
             INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
             LEFT JOIN companies c ON jp.company_id = c.id
@@ -170,7 +169,7 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
     # Get match score for this user
     match = db.execute(
         text("""
-            SELECT id, score, tier, reasons_json, missing_skills_json
+            SELECT id, overall_score, grade, details
             FROM match_scores
             WHERE job_posting_id = :jid AND user_id = :uid
             LIMIT 1
@@ -188,9 +187,7 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
         "salary_min": row[6],
         "salary_max": row[7],
         "posted_at": row[8].isoformat() if row[8] else None,
-        "discovered_at": row[9].isoformat() if row[9] else None,
-        "status": row[10],
-        "company": row[11] or "Unknown",
+        "company": row[9] or "Unknown",
     }
 
     if match:
@@ -198,8 +195,7 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
             "id": str(match[0]),
             "score": match[1],
             "tier": match[2],
-            "reasons": match[3],
-            "missing_skills": match[4],
+            "details": match[3],
         }
 
     return result
@@ -209,8 +205,8 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
 async def save_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Save a job to user's saved list."""
     db.execute(
-        text("UPDATE job_postings SET status = 'saved' WHERE id = :jid"),
-        {"jid": job_id},
+        text("INSERT INTO user_jobs (user_id, job_posting_id, status) VALUES (:uid, :jid, 'saved') ON CONFLICT (user_id, job_posting_id) DO UPDATE SET status = 'saved'"),
+        {"uid": user_id, "jid": job_id},
     )
     db.commit()
     return {"status": "saved", "job_id": job_id}
@@ -220,8 +216,8 @@ async def save_job(job_id: str, user_id: str = Depends(get_current_user_id), db:
 async def reject_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Reject a job (hide from results)."""
     db.execute(
-        text("UPDATE job_postings SET status = 'rejected' WHERE id = :jid"),
-        {"jid": job_id},
+        text("INSERT INTO user_jobs (user_id, job_posting_id, status) VALUES (:uid, :jid, 'rejected') ON CONFLICT (user_id, job_posting_id) DO UPDATE SET status = 'rejected'"),
+        {"uid": user_id, "jid": job_id},
     )
     db.commit()
     return {"status": "rejected", "job_id": job_id}
@@ -252,8 +248,8 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
     app_id = uuid4()
     db.execute(
         text("""
-            INSERT INTO applications (id, user_id, job_posting_id, status, method)
-            VALUES (:aid, :uid, :jid, 'pending_approval', 'manual')
+            INSERT INTO applications (id, user_id, job_posting_id, status)
+            VALUES (:aid, :uid, :jid, 'SUBMITTED')
         """),
         {"aid": app_id, "uid": uuid.UUID(user_id), "jid": job_id},
     )

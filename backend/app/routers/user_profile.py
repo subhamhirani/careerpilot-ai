@@ -141,10 +141,9 @@ async def update_profile(
             query = f"UPDATE user_profiles SET {', '.join(set_clauses)} WHERE user_id = :uid"
             session.execute(text(query), params)
         else:
-            # INSERT — must include raw_json (NOT NULL)
             new_id = str(uuid.uuid4())
-            cols = ["id", "user_id", "raw_json"]
-            params = {"id": new_id, "user_id": uid, "raw_json": "{}"}
+            cols = ["id", "user_id"]
+            params = {"id": new_id, "user_id": uid}
             for key, value in data.items():
                 if key in ("skills", "experience", "education", "target_roles"):
                     value = json.dumps(value)

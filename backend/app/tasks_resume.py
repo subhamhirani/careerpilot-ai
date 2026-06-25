@@ -162,11 +162,10 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
         locs_val = profile.preferred_locations if isinstance(profile.preferred_locations, list) else list(profile.preferred_locations)
 
         if not existing_profile:
-            raw_json_str = json.dumps(profile.to_dict())
             session.execute(
                 text(
-                    "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, raw_json, created_at, updated_at) "
-                    "VALUES (:id, :uid, :name, :phone, :summary, :raw_json, NOW(), NOW())"
+                    "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, created_at, updated_at) "
+                    "VALUES (:id, :uid, :name, :phone, :summary, NOW(), NOW())"
                 ),
                 {
                     "id": str(uuid.uuid4()),
@@ -174,7 +173,6 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                     "name": profile.full_name or "",
                     "phone": profile.phone or "",
                     "summary": profile.summary or "",
-                    "raw_json": raw_json_str,
                 },
             )
         else:

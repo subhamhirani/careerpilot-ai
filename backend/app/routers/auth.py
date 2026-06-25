@@ -44,7 +44,7 @@ def _create_user_in_db(user_id: str, email: str, password_hash: str) -> None:
     try:
         with engine.connect() as conn:
             conn.execute(
-                text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw) ON CONFLICT (id) DO NOTHING"),
+                text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw) ON CONFLICT (email) DO NOTHING"),
                 {"id": user_id, "email": email, "pw": password_hash},
             )
             conn.commit()

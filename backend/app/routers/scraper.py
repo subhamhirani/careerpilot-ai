@@ -145,21 +145,20 @@ async def get_matches(
     try:
         query = """
             SELECT
-                jp.id, jp.title, jp.location, jp.source,
-                jp.url,
-                ms.score, ms.tier, ms.reasons_json,
-                ms.missing_skills_json
+                jp.id, jp.title, jp.location, jp.source_platform,
+                jp.source_url,
+                ms.overall_score, ms.grade, ms.details
             FROM match_scores ms
             JOIN job_postings jp ON jp.id = ms.job_posting_id
-            WHERE ms.user_id = :uid AND ms.score >= :min_score
+            WHERE ms.user_id = :uid AND ms.overall_score >= :min_score
         """
         params: dict[str, Any] = {"uid": user_id, "min_score": int(min_score)}
 
         if source:
-            query += " AND jp.source = :source"
+            query += " AND jp.source_platform = :source"
             params["source"] = source
 
-        query += " ORDER BY ms.score DESC LIMIT :limit"
+        query += " ORDER BY ms.overall_score DESC LIMIT :limit"
         params["limit"] = limit
 
         rows = session.execute(text(query), params).mappings().all()
@@ -189,11 +188,11 @@ async def get_matches(
                 "title": row.get("title", ""),
                 "company": "",
                 "location": row.get("location", ""),
-                "source": row.get("source", ""),
-                "url": row.get("url", ""),
-                "relevance_score": row.get("score", 0),
-                "tier": row.get("tier", ""),
-                "matched_skills": reasons.get("matched_skills", []),
+                "source": row.get("source_platform", ""),
+                "url": row.get("source_url", ""),
+                "relevance_score": row.get("overall_score", 0),
+                "tier": row.get("grade", ""),
+                "matched_skills": reasons.get("matched_skills", []) if isinstance(reasons, dict) else [],
                 "missing_skills": missing_skills,
             })
 

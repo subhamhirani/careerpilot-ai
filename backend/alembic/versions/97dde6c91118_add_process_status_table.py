@@ -36,10 +36,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_process_statuses_user_id'), 'process_statuses', ['user_id'], unique=False)
-    op.drop_index(op.f('idx_careerpilot_jobs_embedding'), table_name='careerpilot_jobs', postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'lists': '100'}, postgresql_using='ivfflat')
-    op.drop_index(op.f('idx_careerpilot_jobs_hash'), table_name='careerpilot_jobs')
-    op.drop_index(op.f('idx_careerpilot_jobs_source'), table_name='careerpilot_jobs')
-    op.drop_table('careerpilot_jobs')
+    # Skip careerpilot_jobs cleanup - table does not exist in this schema version
     op.add_column('applications', sa.Column('resume_id', sa.UUID(), nullable=True))
     op.add_column('applications', sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('applications', sa.Column('notes', sa.Text(), nullable=True))

@@ -42,7 +42,7 @@ async def list_matches(
     params = {"uid": uuid.UUID(user_id), "limit": limit, "offset": offset}
 
     if tier:
-        conditions.append("ms.tier = :tier")
+        conditions.append("ms.grade = :tier")
         params["tier"] = tier
 
     where = " AND ".join(conditions)
@@ -52,14 +52,14 @@ async def list_matches(
 
     rows = db.execute(
         text(f"""
-            SELECT ms.id, ms.job_posting_id, ms.score, ms.tier,
-                   ms.reasons_json, ms.missing_skills_json, ms.computed_at,
+            SELECT ms.id, ms.job_posting_id, ms.overall_score, ms.grade,
+                   ms.details, ms.computed_at,
                    jp.title, jp.location, c.name as company_name
             FROM match_scores ms
             JOIN job_postings jp ON ms.job_posting_id = jp.id
             LEFT JOIN companies c ON jp.company_id = c.id
             WHERE {where}
-            ORDER BY ms.score DESC
+            ORDER BY ms.overall_score DESC
             LIMIT :limit OFFSET :offset
         """),
         params,
@@ -67,17 +67,23 @@ async def list_matches(
 
     matches = []
     for row in rows:
+        details = row[4]
+        if isinstance(details, str):
+            import json as _json
+            details = _json.loads(details)
+        if not isinstance(details, dict):
+            details = {}
         matches.append({
             "id": str(row[0]),
             "job_posting_id": str(row[1]),
             "score": row[2],
             "tier": row[3],
-            "reasons": row[4],
-            "missing_skills": row[5],
-            "computed_at": row[6].isoformat() if row[6] else None,
-            "job_title": row[7],
-            "job_location": row[8],
-            "company": row[9] or "Unknown",
+            "reasons": details.get("matched_skills", []),
+            "missing_skills": details.get("missing_skills", []),
+            "computed_at": row[5].isoformat() if row[5] else None,
+            "job_title": row[6],
+            "job_location": row[7],
+            "company": row[8] or "Unknown",
         })
 
     return {"matches": matches, "total": total, "limit": limit, "offset": offset}
@@ -88,9 +94,9 @@ async def get_match(match_id: str, user_id: str = Depends(get_current_user_id), 
     """Get detailed match breakdown."""
     row = db.execute(
         text("""
-            SELECT ms.id, ms.job_posting_id, ms.score, ms.tier,
-                   ms.reasons_json, ms.missing_skills_json, ms.risk_indicators_json,
-                   ms.computed_at, jp.title, jp.description, jp.location, jp.url,
+            SELECT ms.id, ms.job_posting_id, ms.overall_score, ms.grade,
+                   ms.details,
+                   ms.computed_at, jp.title, jp.description, jp.location, jp.source_url,
                    c.name as company_name
             FROM match_scores ms
             JOIN job_postings jp ON ms.job_posting_id = jp.id
@@ -103,20 +109,27 @@ async def get_match(match_id: str, user_id: str = Depends(get_current_user_id), 
     if not row:
         raise HTTPException(status_code=404, detail="Match not found")
 
+    details = row[4]
+    if isinstance(details, str):
+        import json as _json
+        details = _json.loads(details)
+    if not isinstance(details, dict):
+        details = {}
+
     return {
         "id": str(row[0]),
         "job_posting_id": str(row[1]),
         "score": row[2],
         "tier": row[3],
-        "reasons": row[4],
-        "missing_skills": row[5],
-        "risk_indicators": row[6],
-        "computed_at": row[7].isoformat() if row[7] else None,
+        "reasons": details.get("matched_skills", []),
+        "missing_skills": details.get("missing_skills", []),
+        "risk_indicators": details.get("risk_indicators", []),
+        "computed_at": row[5].isoformat() if row[5] else None,
         "job": {
-            "title": row[8],
-            "description": row[9],
-            "location": row[10],
-            "url": row[11],
+            "title": row[6],
+            "description": row[7],
+            "location": row[8],
+            "url": row[9],
             "company": row[12] or "Unknown",
         },
     }

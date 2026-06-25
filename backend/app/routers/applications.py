@@ -61,16 +61,16 @@ async def list_applications(
 
     rows = db.execute(
         text(f"""
-            SELECT a.id, a.job_posting_id, a.status, a.method,
-                   a.applied_at,
+            SELECT a.id, a.job_posting_id, a.status,
+                   a.submitted_at as applied_at,
                    jp.title, jp.location, c.name as company_name,
-                   ms.score as match_score, jp.source
+                   ms.overall_score as match_score, jp.source_platform as source
             FROM applications a
             JOIN job_postings jp ON a.job_posting_id = jp.id
             LEFT JOIN companies c ON jp.company_id = c.id
             LEFT JOIN match_scores ms ON ms.job_posting_id = a.job_posting_id AND ms.user_id = a.user_id
             WHERE {where}
-            ORDER BY a.applied_at DESC
+            ORDER BY a.submitted_at DESC
             LIMIT :limit OFFSET :offset
         """),
         params,
@@ -82,14 +82,13 @@ async def list_applications(
             "id": str(row[0]),
             "job_posting_id": str(row[1]),
             "status": row[2],
-            "method": row[3],
-            "submitted_at": row[4].isoformat() if row[4] else None,
-            "match_score": row[8] if row[8] is not None else None,
+            "submitted_at": row[3].isoformat() if row[3] else None,
+            "match_score": row[7] if row[7] is not None else None,
             "job": {
-                "title": row[5],
-                "location": row[6],
-                "company": row[7] or "Unknown",
-                "source": row[9],
+                "title": row[4],
+                "location": row[5],
+                "company": row[6] or "Unknown",
+                "source": row[8],
             },
             "error_message": None,
             "resume": None,
@@ -107,11 +106,11 @@ async def get_application(
     """Get detailed status of a specific application."""
     row = db.execute(
         text("""
-            SELECT a.id, a.job_posting_id, a.status, a.method,
+            SELECT a.id, a.job_posting_id, a.status,
                    a.screenshot_before, a.screenshot_after,
                    a.confirmation_id,
-                   a.applied_at,
-                   jp.title, jp.location, jp.url, c.name as company_name
+                   a.submitted_at,
+                   jp.title, jp.location, jp.source_url, c.name as company_name
             FROM applications a
             JOIN job_postings jp ON a.job_posting_id = jp.id
             LEFT JOIN companies c ON jp.company_id = c.id
@@ -127,16 +126,15 @@ async def get_application(
         "id": str(row[0]),
         "job_posting_id": str(row[1]),
         "status": row[2],
-        "method": row[3],
-        "screenshot_before": row[4],
-        "screenshot_after": row[5],
-        "confirmation_id": row[6],
-        "applied_at": row[7].isoformat() if row[7] else None,
+        "screenshot_before": row[3],
+        "screenshot_after": row[4],
+        "confirmation_id": row[5],
+        "applied_at": row[6].isoformat() if row[6] else None,
         "job": {
-            "title": row[8],
-            "location": row[9],
-            "url": row[10],
-            "company": row[11] or "Unknown",
+            "title": row[7],
+            "location": row[8],
+            "url": row[9],
+            "company": row[10] or "Unknown",
         },
     }
 
