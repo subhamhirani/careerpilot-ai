@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useDashboardStore } from '@/lib/store';
 import { StatsCard } from '@/components/stats-card';
@@ -194,23 +193,20 @@ function ScraperStatusCard() {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { isAuthenticated } = useAuth();
   const { stats, setStats, loading, setLoading } = useDashboardStore();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
-  // Check authentication and redirect BEFORE rendering dashboard
+  // Only render dashboard for authenticated users
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('careerpilot_token') : null;
+    const token = localStorage.getItem('careerpilot_token');
     if (!token) {
-      router.push('/login');
+      window.location.href = '/login';
       return;
     }
-    setIsCheckingAuth(false);
-  }, [router]);
+    setAuthorized(true);
+  }, []);
 
-  // Show nothing while checking auth or redirecting
-  if (!isAuthenticated || isCheckingAuth) {
+  if (!authorized) {
     return null;
   }
 
