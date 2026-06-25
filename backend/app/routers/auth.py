@@ -31,23 +31,36 @@ _users: dict[str, dict] = {}          # email → {id, email, password_hash}
 _email_to_id: dict[str, str] = {}     # email → user_id
 
 
-def _create_user_in_db(user_id: str, email: str, password_hash: str) -> None:
-    """Create a user row in PostgreSQL so FK constraints work for Celery tasks."""
+def _create_user_in_db(user_id: str, email: str, password_hash: str) -> str:
+    """Create a user row in PostgreSQL so FK constraints work for Celery tasks.
+    Returns the actual user_id (may differ from input if email already existed).
+    """
     import os
     from sqlalchemy import create_engine, text
 
     dsn = os.getenv("DATABASE_URL", "")
     if not dsn:
-        return
+        return user_id
     sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
     engine = create_engine(sync_dsn)
     try:
         with engine.connect() as conn:
-            conn.execute(
-                text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw) ON CONFLICT (email) DO NOTHING"),
+            # Try insert first
+            result = conn.execute(
+                text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw) ON CONFLICT (email) DO NOTHING RETURNING id"),
                 {"id": user_id, "email": email, "pw": password_hash},
             )
+            row = result.fetchone()
+            if row:
+                conn.commit()
+                return user_id
+            # Conflict: user already exists, fetch existing user_id
+            existing = conn.execute(
+                text("SELECT id FROM users WHERE email = :email"),
+                {"email": email},
+            ).fetchone()
             conn.commit()
+            return str(existing[0]) if existing else user_id
     finally:
         engine.dispose()
 
@@ -81,9 +94,10 @@ async def register(body: RegisterRequest):
     # Also create user in the database so FK constraints work
     db_err = None
     try:
-        _create_user_in_db(user_id, body.email, _users[user_id]["password_hash"])
+        actual_user_id = _create_user_in_db(user_id, body.email, _users[user_id]["password_hash"])
     except Exception as e:
         db_err = e
+        actual_user_id = None
         import logging
         logging.getLogger(__name__).error("Failed to create user in DB: %s", e)
 
@@ -92,6 +106,15 @@ async def register(body: RegisterRequest):
         del _users[user_id]
         del _email_to_id[body.email]
         raise HTTPException(status_code=500, detail="Failed to create user in database. Please try again.")
+
+    # If the email already existed in DB, use the existing user_id
+    if actual_user_id and actual_user_id != user_id:
+        # Roll back the in-memory entry for the new UUID
+        del _users[user_id]
+        user_id = actual_user_id
+        # Re-add in-memory entry with the correct ID
+        _users[user_id] = {"id": user_id, "email": body.email, "password_hash": _users.get(user_id, {}).get("password_hash", _users.get(id, {}).get("password_hash", ""))}
+        _email_to_id[body.email] = user_id
 
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
