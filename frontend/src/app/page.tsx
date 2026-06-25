@@ -198,13 +198,14 @@ export default function DashboardPage() {
   const { isAuthenticated } = useAuth();
   const { stats, setStats, loading, setLoading } = useDashboardStore();
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    const token = localStorage.getItem('careerpilot_token');
-    if (!token) {
+  // Redirect to login if not authenticated - checked immediately
+  const token = typeof window !== 'undefined' ? localStorage.getItem('careerpilot_token') : null;
+  if (!token) {
+    if (typeof window !== 'undefined') {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+    return null; // Don't render anything during redirect
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],

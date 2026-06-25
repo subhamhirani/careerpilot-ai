@@ -201,13 +201,13 @@ The repository uses **GitHub Actions** for automated testing, building, and depl
 
 ```mermaid
 graph LR
-    A[Push to main] --> B[CI: Lint & Test]
-    B --> C[Build Docker Images]
-    C --> D[Run Unit & Integration Tests]
-    D --> E[Push Images to Docker Hub]
-    E --> F[Deploy to VPS (SSH)]
-    F --> G[Restart Services]
-    G --> H[Run Database Migrations]
+    A[Push to main] --> B[CI: Lint & Test];
+    B --> C[Build Docker Images];
+    C --> D[Run Unit & Integration Tests];
+    D --> E[Push Images to Docker Hub];
+    E --> F[Deploy to VPS (SSH)];
+    F --> G[Restart Services];
+    G --> H[Run Database Migrations];
 ```
 
 - **Linting**: `ruff` (Python) and `eslint` (JS).
