@@ -58,6 +58,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-careerpilot}:${POSTGRES_PASSWORD:-careerpilot_secret}@postgres:5432/${POSTGRES_DB:-careerpilot}
     volumes:
       - backend_storage:/app/storage
+      - ./backend/alembic.ini:/app/alembic.ini:ro
+      - ./backend/alembic:/app/alembic:ro
     depends_on:
       postgres:
         condition: service_healthy
