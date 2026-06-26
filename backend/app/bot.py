@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 # Celery app import
 # ---------------------------------------------------------------------------
-from .celery_config import app as celery_app
+from .celery_config import celery_app
 
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -555,7 +555,6 @@ def run_bot() -> None:
     )
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-
 def main() -> None:
     """Entry point for standalone execution."""
     logging.basicConfig(
@@ -569,6 +568,86 @@ def main() -> None:
 # ---------------------------------------------------------------------------
 # Celery tasks
 # ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    acks_late=True,
+    name="app.bot.send_daily_digest",
+)
+def send_daily_digest(self) -> dict:
+    """Build and dispatch the daily digest via Telegram."""
+    logger.info("Task [send_daily_digest] started")
+    try:
+        # Fetch data for digest from the database
+        try:
+            from sqlalchemy import create_engine, text
+            from sqlalchemy.orm import Session
+
+            dsn = os.getenv("DATABASE_URL", "")
+            sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+            engine = create_engine(sync_dsn)
+
+            with Session(engine) as session:
+                new_jobs = session.execute(
+                    text("SELECT COUNT(*) FROM job_postings WHERE created_at >= NOW() - INTERVAL '24 hours'")
+                ).scalar() or 0
+
+                excellent = session.execute(
+                    text("SELECT COUNT(*) FROM match_scores WHERE score >= 85")
+                ).scalar() or 0
+
+                pending = session.execute(
+                    text("SELECT COUNT(*) FROM approvals WHERE status = 'pending'")
+                ).scalar() or 0
+
+                top_rows = session.execute(
+                    text("""
+                        SELECT j.title, j.company, ms.score
+                        FROM match_scores ms
+                        JOIN job_postings j ON j.id = ms.job_posting_id
+                        ORDER BY ms.score DESC
+                        LIMIT 3
+                    """)
+                ).mappings().all()
+
+                top_jobs = [
+                    {"title": r["title"], "company": r["company"], "score": r["score"]}
+                    for r in top_rows
+                ]
+        except Exception as db_err:
+            logger.warning("DB query for digest failed: %s", db_err)
+            new_jobs = excellent = pending = 0
+            top_jobs = []
+
+        message = build_daily_digest(new_jobs, excellent, pending, top_jobs)
+
+        # Dispatch via Telegram if possible
+        allowed = os.getenv("ALLOWED_USER_ID", "")
+        if allowed:
+            try:
+                chat_id = int(allowed)
+                import asyncio
+                asyncio.create_task(
+                    application.bot.send_message(
+                        chat_id=chat_id, text=message, parse_mode="Markdown"
+                    )
+                )
+            except Exception as send_err:
+                logger.warning("Telegram send failed: %s", send_err)
+
+        logger.info("Task [send_daily_digest] completed")
+        return {
+            "digest_dispatched": True,
+            "new_jobs": new_jobs,
+            "excellent": excellent,
+        }
+    except Exception as exc:
+        logger.exception("Task [send_daily_digest] failed")
+        raise self.retry(exc=exc)
+
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60, acks_late=True, name="app.bot.send_pending_reminder")
 def send_pending_reminder(self, cutoff_iso: str) -> dict:

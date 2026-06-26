@@ -37,6 +37,7 @@ celery_app = Celery(
 )
 
 # Explicitly import task modules so Celery registers them.
+import app.tasks  # noqa: F401
 import app.tasks_scraper  # noqa: F401
 import app.tasks_resume   # noqa: F401
 
@@ -95,7 +96,6 @@ celery_app.conf.beat_schedule = {
         "options": {"expires": 600},
     },
 }
-
 # ---------------------------------------------------------------------------
 # Debug task (used to verify the worker is running)
 # ---------------------------------------------------------------------------
@@ -105,3 +105,8 @@ celery_app.conf.beat_schedule = {
 def debug_task(self) -> str:
     """Simple debug task to verify Celery is working."""
     return f"Request: {self.request!r}"
+
+
+# Explicitly import bot task module at the very end to avoid
+# circular imports (bot.py imports from celery_config).
+import app.bot  # noqa: F401 — registers app.bot.send_daily_digest, app.bot.send_pending_reminder
