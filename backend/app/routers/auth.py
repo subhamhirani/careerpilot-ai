@@ -246,6 +246,21 @@ async def register(body: RegisterRequest):
     if actual_user_id and actual_user_id != user_id:
         saved_hash = _users[user_id]["password_hash"]
         del _users[user_id]
+        # Also update the DB so all workers see the new password hash
+        import os as _os
+        sync_dsn = _os.getenv("DATABASE_URL", "").replace("+asyncpg", "+psycopg2")
+        if sync_dsn:
+            from sqlalchemy import create_engine as _c, text as _t
+            _engine = _c(sync_dsn)
+            try:
+                with _engine.connect() as _conn:
+                    _conn.execute(
+                        _t("UPDATE users SET hashed_password = :pw, updated_at = NOW() WHERE id = :uid"),
+                        {"pw": saved_hash, "uid": actual_user_id},
+                    )
+                    _conn.commit()
+            finally:
+                _engine.dispose()
         user_id = actual_user_id
         _users[user_id] = {"id": user_id, "email": body.email, "password_hash": saved_hash}
         _email_to_id[body.email] = user_id
@@ -268,10 +283,36 @@ async def login(body: LoginRequest):
     user_id = _email_to_id.get(body.email)
 
     if user_id is not None:
-        # In-memory user found
+        # In-memory user found - check the cached hash
         user = _users[user_id]
         if not verify_password(body.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            # In-memory hash may be stale (password was reset by a different worker).
+            # Fall through to the DB path below for the canonical check.
+            user_id = None
+        else:
+            # In-memory hash matched — but it might be stale on another worker.
+            # Verify the DB hasn't moved on (e.g. password reset hit a different worker).
+            import os
+            from sqlalchemy import create_engine, text
+            dsn = os.getenv("DATABASE_URL", "")
+            if dsn:
+                sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+                engine = create_engine(sync_dsn)
+                try:
+                    with engine.connect() as conn:
+                        result = conn.execute(
+                            text("SELECT hashed_password FROM users WHERE id = :uid"),
+                            {"uid": user_id},
+                        ).fetchone()
+                        if result is not None and result[0] != user["password_hash"]:
+                            # Password was rotated — in-memory hash is stale.
+                            # Update cached hash and re-verify.
+                            db_hash = result[0]
+                            if not verify_password(body.password, db_hash):
+                                raise HTTPException(status_code=401, detail="Invalid email or password")
+                            _users[user_id]["password_hash"] = db_hash
+                finally:
+                    engine.dispose()
     else:
         # Fall back to database check
         import os
