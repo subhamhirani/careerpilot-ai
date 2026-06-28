@@ -71,8 +71,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
       toast.error('Passwords do not match');
       return;
     }
-    if (regPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (regPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
       return;
     }
     setLoading(true);

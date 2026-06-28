@@ -31,7 +31,15 @@ async function apiPost(path: string, body: unknown): Promise<Record<string, unkn
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as Record<string, unknown>).detail as string || `HTTP ${res.status}`);
+    let message = `HTTP ${res.status}`;
+    if (typeof err.detail === 'string') {
+      message = err.detail;
+    } else if (Array.isArray(err.detail)) {
+      message = err.detail[0]?.msg || `Validation error (HTTP ${res.status})`;
+    } else if (err.message) {
+      message = err.message;
+    }
+    throw new Error(message);
   }
   return res.json();
 }

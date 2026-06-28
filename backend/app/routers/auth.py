@@ -202,6 +202,10 @@ async def reset_password(body: ResetPasswordRequest):
 
             conn.commit()
 
+            # Update in-memory store so the new password works immediately
+            if user_id in _users:
+                _users[user_id]["password_hash"] = new_hash
+
             return {"message": "Password has been reset successfully."}
     finally:
         engine.dispose()
@@ -238,12 +242,12 @@ async def register(body: RegisterRequest):
         raise HTTPException(status_code=500, detail="Failed to create user in database. Please try again.")
 
     # If the email already existed in DB, use the existing user_id
+    # and preserve the in-memory mapping with the correct ID/password
     if actual_user_id and actual_user_id != user_id:
-        # Roll back the in-memory entry for the new UUID
+        saved_hash = _users[user_id]["password_hash"]
         del _users[user_id]
         user_id = actual_user_id
-        # Re-add in-memory entry with the correct ID
-        _users[user_id] = {"id": user_id, "email": body.email, "password_hash": _users.get(user_id, {}).get("password_hash", _users.get(id, {}).get("password_hash", ""))}
+        _users[user_id] = {"id": user_id, "email": body.email, "password_hash": saved_hash}
         _email_to_id[body.email] = user_id
 
     access_token = create_access_token(user_id)
