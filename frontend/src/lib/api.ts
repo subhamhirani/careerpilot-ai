@@ -2,7 +2,8 @@
 // CareerPilot - API Client
 // ============================================================
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = RAW_API_BASE.replace(/\/api\/?$/, '').replace(/\/$/, '');
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;

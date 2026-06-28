@@ -162,7 +162,7 @@ export default function OnboardingPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('name', file.name.replace(/\.(pdf|docx)$/i, ''));
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+      const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/$/, '');
       const token = localStorage.getItem('careerpilot_token') || '';
       const res = await fetch(`${API_BASE}/api/resumes/upload`, {
         method: 'POST',

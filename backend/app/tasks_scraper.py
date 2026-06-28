@@ -210,6 +210,7 @@ def scrape_and_store_jobs(
                             {"name": company_name},
                         ).scalar()
 
+                job_hash = (job.get("hash_key") or "").strip() or None
                 result = session.execute(
                     text(
                         """
@@ -221,7 +222,7 @@ def scrape_and_store_jobs(
                             (:cid, :title, :desc, :location,
                              :url, :source, :source_job_id,
                              :hk, 'new', true)
-                        ON CONFLICT (hash_key) DO NOTHING
+                        ON CONFLICT (hash_key) WHERE hash_key IS NOT NULL DO NOTHING
                         RETURNING id
                         """
                     ),
@@ -233,15 +234,21 @@ def scrape_and_store_jobs(
                         "url": job.get("url", ""),
                         "source": job.get("source", ""),
                         "source_job_id": job.get("source_job_id", ""),
-                        "hk": job.get("hash_key", ""),
+                        "hk": job_hash,
                     },
                 )
-                new_job_id = result.scalar()
-                if new_job_id:
+                job_id = result.scalar()
+                if job_id:
                     new_count += 1
+                elif job_hash:
+                    existing_job = session.execute(
+                        text("SELECT id FROM job_postings WHERE hash_key = :hk"),
+                        {"hk": job_hash},
+                    ).mappings().fetchone()
+                    job_id = existing_job["id"] if existing_job else None
 
-                # Map job to user for per-user isolation
-                if user_id and new_job_id:
+                # Map both newly inserted and already-existing jobs to the user.
+                if user_id and job_id:
                     session.execute(
                         text(
                             """
@@ -250,7 +257,7 @@ def scrape_and_store_jobs(
                             ON CONFLICT (user_id, job_posting_id) DO NOTHING
                             """
                         ),
-                        {"uid": user_id, "jid": new_job_id},
+                        {"uid": user_id, "jid": job_id},
                     )
 
             session.commit()
