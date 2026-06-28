@@ -15,10 +15,13 @@ from ..auth import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    generate_reset_token,
     generate_totp_secret,
     get_current_user_id,
+    get_reset_token_expiry,
     get_totp_uri,
     hash_password,
+    hash_reset_token,
     refresh_access_token,
     verify_password,
     verify_totp,
@@ -75,6 +78,133 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest):
+    """Request a password reset. Returns the reset token in the response.
+
+    In a production environment this token would be sent via email.
+    For development it is returned directly.
+    """
+    import os
+
+    from sqlalchemy import create_engine, text
+
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+    engine = create_engine(sync_dsn)
+
+    try:
+        with engine.connect() as conn:
+            # Find user by email
+            user = conn.execute(
+                text("SELECT id FROM users WHERE email = :email AND is_active = TRUE"),
+                {"email": body.email},
+            ).fetchone()
+
+            if not user:
+                # Return success even for unknown emails to prevent email enumeration
+                return {
+                    "message": "If an account with that email exists, a reset token has been generated.",
+                    "token": None,
+                }
+
+            user_id = user[0]
+
+            # Invalidate any existing unused tokens for this user
+            conn.execute(
+                text(
+                    "UPDATE password_reset_tokens SET used = TRUE "
+                    "WHERE user_id = :uid AND used = FALSE"
+                ),
+                {"uid": user_id},
+            )
+
+            # Generate new token
+            raw_token, token_hash = generate_reset_token()
+            expires_at = get_reset_token_expiry()
+
+            conn.execute(
+                text(
+                    "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) "
+                    "VALUES (:uid, :hash, :exp)"
+                ),
+                {"uid": user_id, "hash": token_hash, "exp": expires_at},
+            )
+            conn.commit()
+
+            return {
+                "message": "If an account with that email exists, a reset token has been generated.",
+                "token": raw_token,
+            }
+    finally:
+        engine.dispose()
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest):
+    """Reset a user's password using a valid reset token."""
+    import os
+
+    from sqlalchemy import create_engine, text
+
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+    engine = create_engine(sync_dsn)
+
+    token_hash = hash_reset_token(body.token)
+
+    try:
+        with engine.connect() as conn:
+            # Find valid token
+            row = conn.execute(
+                text(
+                    "SELECT id, user_id, expires_at FROM password_reset_tokens "
+                    "WHERE token_hash = :hash AND used = FALSE AND expires_at > NOW()"
+                ),
+                {"hash": token_hash},
+            ).fetchone()
+
+            if not row:
+                raise HTTPException(
+                    status_code=400, detail="Invalid or expired reset token"
+                )
+
+            token_id = row[0]
+            user_id = row[1]
+
+            # Update the password
+            new_hash = hash_password(body.new_password)
+            conn.execute(
+                text("UPDATE users SET hashed_password = :pw, updated_at = NOW() WHERE id = :uid"),
+                {"pw": new_hash, "uid": user_id},
+            )
+
+            # Mark token as used
+            conn.execute(
+                text("UPDATE password_reset_tokens SET used = TRUE WHERE id = :tid"),
+                {"tid": token_id},
+            )
+
+            conn.commit()
+
+            return {"message": "Password has been reset successfully."}
+    finally:
+        engine.dispose()
 
 
 @router.post("/register", status_code=201)

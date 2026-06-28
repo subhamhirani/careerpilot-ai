@@ -230,7 +230,7 @@ async def generate_cover_letter(
         profile_row = session.execute(
             text(
                 "SELECT full_name, skills, experience, summary, "
-                "preferred_location, target_roles "
+                "preferred_location "
                 "FROM user_profiles WHERE user_id = :uid"
             ),
             {"uid": user_id},

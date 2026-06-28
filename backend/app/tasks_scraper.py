@@ -55,7 +55,7 @@ def _build_user_queries(user_id: str | None) -> tuple[list[str], list[str]]:
     try:
         profile_row = session.execute(
             text(
-                "SELECT skills, target_roles FROM user_profiles WHERE user_id = :uid"
+                "SELECT skills FROM user_profiles WHERE user_id = :uid"
             ),
             {"uid": user_id},
         ).mappings().fetchone()
@@ -78,16 +78,16 @@ def _build_user_queries(user_id: str | None) -> tuple[list[str], list[str]]:
                     if isinstance(v, list):
                         skills.extend(str(x) for x in v if str(x).strip())
 
-        target_roles = []
-        if profile_row.get("target_roles"):
-            r = profile_row["target_roles"]
+        preferred_roles = []
+        if profile_row.get("preferred_roles"):
+            r = profile_row["preferred_roles"]
             if isinstance(r, str):
                 r = _json.loads(r)
             if isinstance(r, list):
-                target_roles = [str(x) for x in r if str(x).strip()]
+                preferred_roles = [str(x) for x in r if str(x).strip()]
 
-        # Merge and deduplicate: target roles first, then top skills
-        queries = list(dict.fromkeys(target_roles + skills))
+        # Merge and deduplicate: preferred roles first, then top skills
+        queries = list(dict.fromkeys(preferred_roles + skills))
         # Cap at 15 to avoid excessive scraping
         queries = queries[:15]
 
@@ -183,39 +183,62 @@ def scrape_and_store_jobs(
         new_count = 0
         try:
             for job in jobs:
-                # Check if job already exists by hash_key
-                existing = session.execute(
-                    text("SELECT id FROM job_postings WHERE hash_key = :hk"),
-                    {"hk": job.get("hash_key", "")},
-                ).fetchone()
+                # Get or create company
+                company_name = job.get("company", "").strip() or "Unknown"
+                company_row = session.execute(
+                    text("SELECT id FROM companies WHERE name = :name"),
+                    {"name": company_name},
+                ).mappings().fetchone()
+                if company_row:
+                    company_id = company_row["id"]
+                else:
+                    # Create unknown companies lazily (only on first encounter)
+                    if company_name == "Unknown":
+                        # Try to find any existing "Unknown" company
+                        existing = session.execute(
+                            text("SELECT id FROM companies WHERE name = 'Unknown'"),
+                        ).mappings().fetchone()
+                        if existing:
+                            company_id = existing["id"]
+                        else:
+                            company_id = session.execute(
+                                text("INSERT INTO companies (name) VALUES ('Unknown') RETURNING id"),
+                            ).scalar()
+                    else:
+                        company_id = session.execute(
+                            text("INSERT INTO companies (name) VALUES (:name) RETURNING id"),
+                            {"name": company_name},
+                        ).scalar()
 
-                if existing:
-                    continue
-
-                # Insert new job posting
                 result = session.execute(
                     text(
                         """
                         INSERT INTO job_postings
-                            (title, location, description, url, source,
-                             hash_key, status, discovered_at)
+                            (company_id, title, description, location,
+                             source_url, source_platform, external_id,
+                             hash_key, status, is_active)
                         VALUES
-                            (:title, :location, :desc, :url, :source,
-                             :hk, 'new', NOW())
+                            (:cid, :title, :desc, :location,
+                             :url, :source, :source_job_id,
+                             :hk, 'new', true)
+                        ON CONFLICT (hash_key) DO NOTHING
                         RETURNING id
                         """
                     ),
                     {
+                        "cid": company_id,
                         "title": job.get("title", ""),
-                        "location": job.get("location", ""),
                         "desc": job.get("description", "")[:5000],
+                        "location": job.get("location", ""),
                         "url": job.get("url", ""),
                         "source": job.get("source", ""),
+                        "source_job_id": job.get("source_job_id", ""),
                         "hk": job.get("hash_key", ""),
                     },
                 )
                 new_job_id = result.scalar()
-                new_count += 1
+                if new_job_id:
+                    new_count += 1
 
                 # Map job to user for per-user isolation
                 if user_id and new_job_id:
@@ -298,7 +321,7 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             profile_row = session.execute(
                 text(
                     "SELECT full_name, skills, experience, summary, "
-                    "preferred_location, target_roles, total_years_experience "
+                    "preferred_location, preferred_roles, total_years_experience "
                     "FROM user_profiles WHERE user_id = :uid"
                 ),
                 {"uid": user_id},
@@ -324,14 +347,14 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                         elif isinstance(v, str):
                             skills.append(v)
 
-            target_roles = []
-            if profile_row.get("target_roles"):
-                r = profile_row["target_roles"]
+            preferred_roles = []
+            if profile_row.get("preferred_roles"):
+                r = profile_row["preferred_roles"]
                 if isinstance(r, str):
                     import json as _json
                     r = _json.loads(r)
                 if isinstance(r, list):
-                    target_roles = r
+                    preferred_roles = r
 
             preferred_locs = []
             if profile_row.get("preferred_location"):
@@ -344,9 +367,27 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                 skills=skills,
                 experience_years=exp_years,
                 preferred_locations=preferred_locs,
-                target_roles=target_roles,
+                target_roles=preferred_roles,
                 summary=profile_row.get("summary", ""),
             )
+
+            # Ensure all unscored jobs are linked to this user (handles orphaned jobs
+            # scraped by Celery Beat without user context)
+            session.execute(
+                text("""
+                    INSERT INTO user_jobs (user_id, job_posting_id, status)
+                    SELECT :uid, jp.id, 'new'
+                    FROM job_postings jp
+                    WHERE jp.status = 'new'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM user_jobs uj
+                        WHERE uj.job_posting_id = jp.id AND uj.user_id = :uid
+                      )
+                    ON CONFLICT (user_id, job_posting_id) DO NOTHING
+                """),
+                {"uid": user_id},
+            )
+            session.commit()
 
             # Load unscored jobs
             jobs = session.execute(

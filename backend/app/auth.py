@@ -10,7 +10,9 @@ Provides:
 from __future__ import annotations
 
 import bcrypt
+import hashlib
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -189,6 +191,35 @@ def refresh_access_token(refresh_token: str) -> dict[str, str]:
         "refresh_token": create_refresh_token(subject),
         "token_type": "bearer",
     }
+
+
+# ──────────────────────────────────────────────
+#  Password reset tokens
+# ──────────────────────────────────────────────
+
+
+PASSWORD_RESET_TOKEN_BYTES: int = 32
+PASSWORD_RESET_EXPIRE_HOURS: int = 1
+
+
+def generate_reset_token() -> tuple[str, str]:
+    """Generate a cryptographically secure reset token.
+
+    Returns:
+        Tuple of (raw_token, sha256_hex_hash).
+    """
+    raw = secrets.token_urlsafe(PASSWORD_RESET_TOKEN_BYTES)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, token_hash
+
+
+def hash_reset_token(raw_token: str) -> str:
+    """Return the SHA-256 hex digest of *raw_token*."""
+    return hashlib.sha256(raw_token.encode()).hexdigest()
+
+
+def get_reset_token_expiry() -> datetime:
+    return _now() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)
 
 
 # ──────────────────────────────────────────────

@@ -38,16 +38,6 @@
         }
     }
 
-    # Hermes Agent Dashboard
-    handle /dashboard* {
-        reverse_proxy 172.18.0.1:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
     # Static files / frontend
     handle {
         reverse_proxy frontend:3000 {

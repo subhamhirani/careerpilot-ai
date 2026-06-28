@@ -15,6 +15,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => void;
+  forgotPassword: (email: string) => Promise<{message: string; token: string | null}>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -92,6 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const forgotPassword = useCallback(async (email: string) => {
+    return apiPost('/api/auth/forgot-password', { email }) as Promise<{message: string; token: string | null}>;
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, newPassword: string) => {
+    await apiPost('/api/auth/reset-password', { token, new_password: newPassword });
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('careerpilot_token');
     clearAuthToken();
@@ -100,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
