@@ -254,13 +254,13 @@ async def generate_cover_letter(
                     if isinstance(v, list):
                         skills.extend(v)
 
-        target_roles = []
-        if profile_row.get("target_roles"):
-            r = profile_row["target_roles"]
+        preferred_roles = []
+        if profile_row.get("preferred_roles"):
+            r = profile_row["preferred_roles"]
             if isinstance(r, str):
                 r = _json.loads(r)
             if isinstance(r, list):
-                target_roles = r
+                preferred_roles = r
 
         exp_years = 0.0
         if profile_row.get("experience"):
@@ -279,7 +279,7 @@ async def generate_cover_letter(
             "skills": skills,
             "experience_years": exp_years,
             "summary": profile_row.get("summary", ""),
-            "target_roles": target_roles,
+            "preferred_roles": preferred_roles,
             "preferred_locations": [profile_row["preferred_location"]] if profile_row.get("preferred_location") else [],
         }
 

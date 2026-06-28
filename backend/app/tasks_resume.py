@@ -158,7 +158,7 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
         skills_val = profile.skills if isinstance(profile.skills, list) else list(profile.skills)
         exp_val = profile.work_experience if isinstance(profile.work_experience, list) else list(profile.work_experience)
         edu_val = profile.education if isinstance(profile.education, list) else list(profile.education)
-        targets_val = profile.target_roles if isinstance(profile.target_roles, list) else list(profile.target_roles)
+        targets_val = profile.preferred_roles if isinstance(profile.preferred_roles, list) else list(profile.preferred_roles)
         locs_val = profile.preferred_locations if isinstance(profile.preferred_locations, list) else list(profile.preferred_locations)
 
         if not existing_profile:
@@ -180,7 +180,7 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                 text(
                     "UPDATE user_profiles SET full_name = :name, phone = :phone, summary = :summary, "
                     "skills = :skills, experience = :exp, education = :edu, "
-                    "total_years_experience = :years, \"current_role\" = :role, target_roles = :targets, "
+                    "total_years_experience = :years, \"current_role\" = :role, preferred_roles = :targets, "
                     "preferred_location = :locs, updated_at = NOW() WHERE user_id = :uid"
                 ),
                 {

@@ -301,7 +301,7 @@ class JobMatcher:
             f"Preferred Locations: {', '.join(profile.get('preferred_locations', []))}",
             f"Employment Type: {profile.get('employment_type', '')}",
             f"Salary Expectation: {profile.get('salary_expectation', '')}",
-            f"Target Roles: {', '.join(profile.get('target_roles', []))}",
+            f"Target Roles: {', '.join(profile.get('preferred_roles', []))}",
             f"Summary: {profile.get('summary', '')}",
         ]
         # Work experience

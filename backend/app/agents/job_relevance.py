@@ -27,7 +27,7 @@ class UserProfile:
     skills: list[str] = field(default_factory=list)
     experience_years: float = 0.0
     preferred_locations: list[str] = field(default_factory=list)
-    target_roles: list[str] = field(default_factory=list)
+    preferred_roles: list[str] = field(default_factory=list)
     summary: str = ""
     preferred_employment_type: str = ""
 
@@ -207,15 +207,15 @@ def _score_location(user_locations: list[str], job_location: str) -> float:
 # Role alignment scoring
 # ---------------------------------------------------------------------------
 
-def _score_role_alignment(target_roles: list[str], job_title: str) -> float:
+def _score_role_alignment(preferred_roles: list[str], job_title: str) -> float:
     """Score how well the job title matches target roles (0-100)."""
-    if not target_roles or not job_title:
+    if not preferred_roles or not job_title:
         return 50.0
 
     title_lower = job_title.lower()
     best_score = 0.0
 
-    for role in target_roles:
+    for role in preferred_roles:
         role_lower = role.lower().strip()
         if not role_lower:
             continue
@@ -268,7 +268,7 @@ def score_job(profile: UserProfile, job: dict) -> dict[str, Any]:
     loc_score = _score_location(profile.preferred_locations, job.get("location", "") or "")
 
     # 4. Role alignment (weight: 25%)
-    role_score = _score_role_alignment(profile.target_roles, job.get("title", ""))
+    role_score = _score_role_alignment(profile.preferred_roles, job.get("title", ""))
 
     # Weighted total
     total = (
@@ -374,7 +374,7 @@ def profile_from_resume(resume_text: str) -> UserProfile:
         for line in open_to.group(1).split('\n'):
             line = line.strip().strip('·▸•').strip()
             if line and len(line) < 80:
-                profile.target_roles.append(line)
+                profile.preferred_roles.append(line)
 
     # Summary
     summary_match = re.search(r'PROFESSIONAL SUMMARY(.*?)(?:\nEXPERIENCE)', resume_text, re.DOTALL)

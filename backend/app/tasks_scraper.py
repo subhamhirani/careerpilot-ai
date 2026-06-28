@@ -367,7 +367,7 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                 skills=skills,
                 experience_years=exp_years,
                 preferred_locations=preferred_locs,
-                target_roles=preferred_roles,
+                preferred_roles=preferred_roles,
                 summary=profile_row.get("summary", ""),
             )
 

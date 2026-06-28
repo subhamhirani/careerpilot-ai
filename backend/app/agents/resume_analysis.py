@@ -83,7 +83,7 @@ class UserProfile:
     languages: list[str] = field(default_factory=list)
     total_years_experience: float = 0.0
     current_role: str = ""
-    target_roles: list[str] = field(default_factory=list)
+    preferred_roles: list[str] = field(default_factory=list)
     preferred_locations: list[str] = field(default_factory=list)
     employment_type: str = ""  # full-time, contract, hybrid, remote
     salary_expectation: str = ""
@@ -101,7 +101,7 @@ class UserProfile:
             " ".join(self.skills),
             " ".join(self.soft_skills),
             self.current_role,
-            " ".join(self.target_roles),
+            " ".join(self.preferred_roles),
             " ".join(self.preferred_locations),
             self.employment_type,
         ]
@@ -161,7 +161,7 @@ The JSON must match this schema:
   "languages": [],
   "total_years_experience": 0.0,
   "current_role": "",
-  "target_roles": [],
+  "preferred_roles": [],
   "preferred_locations": [],
   "employment_type": "",
   "salary_expectation": ""
@@ -172,7 +172,7 @@ Rules:
 - `email` and `phone` should be normalised.
 - `total_years_experience` should be a float (inferred from work dates if possible).
 - `current_role` is the most recent job title.
-- `target_roles`: if a "Desired Role" or "Objective" section exists, extract it.
+- `preferred_roles`: if a "Desired Role" or "Objective" section exists, extract it.
 - `skills` are technical/hard skills. `soft_skills` are interpersonal skills.
 - `work_experience` list order: most recent first.
 - If a field is missing use empty string / empty list / 0.0.

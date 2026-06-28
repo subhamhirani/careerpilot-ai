@@ -52,7 +52,7 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
 
     # Count pending approvals
     pending = db.execute(
-        text("SELECT COUNT(*) FROM pending_approvals WHERE user_id = :uid AND status = 'pending'"),
+        text("SELECT COUNT(*) FROM pending_approvals WHERE user_id = :uid AND status = 'PENDING'"),
         {"uid": uid},
     ).scalar() or 0
 
@@ -71,7 +71,9 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
                 "FROM match_scores ms "
                 "JOIN job_postings jp ON ms.job_posting_id = jp.id "
                 "LEFT JOIN companies c ON jp.company_id = c.id "
-                "WHERE ms.user_id = :uid ORDER BY ms.score DESC LIMIT 5"
+                "WHERE ms.user_id = :uid "
+                "ORDER BY ms.score DESC NULLS LAST "
+                "LIMIT 5"
             ),
             {"uid": uid},
         ).fetchall()

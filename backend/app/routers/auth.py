@@ -265,8 +265,8 @@ async def register(body: RegisterRequest):
         _users[user_id] = {"id": user_id, "email": body.email, "password_hash": saved_hash}
         _email_to_id[body.email] = user_id
 
-    access_token = create_access_token(user_id)
-    refresh_token = create_refresh_token(user_id)
+    access_token = create_access_token(str(user_id))
+    refresh_token = create_refresh_token(str(user_id))
 
     return {
         "user_id": user_id,
@@ -275,6 +275,36 @@ async def register(body: RegisterRequest):
         "refresh_token": refresh_token,
         "token_type": "bearer",
     }
+
+
+def _verify_login_db(email: str, password: str) -> str:
+    """Look up user by email in DB, verify password, populate in-memory cache.
+    Returns user_id (UUID string) on success, raises HTTPException(401) on failure."""
+    import os
+    from sqlalchemy import create_engine, text
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+    engine = create_engine(sync_dsn)
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT id, hashed_password FROM users WHERE email = :email"),
+                {"email": email},
+            ).fetchone()
+            if result is None:
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            user_id = str(result[0])
+            db_hash = result[1]
+        if not verify_password(password, db_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        # Re-populate in-memory store for subsequent requests
+        _users[user_id] = {"id": user_id, "email": email, "password_hash": db_hash}
+        _email_to_id[email] = user_id
+        return user_id
+    finally:
+        engine.dispose()
 
 
 @router.post("/login")
@@ -287,8 +317,8 @@ async def login(body: LoginRequest):
         user = _users[user_id]
         if not verify_password(body.password, user["password_hash"]):
             # In-memory hash may be stale (password was reset by a different worker).
-            # Fall through to the DB path below for the canonical check.
-            user_id = None
+            # Fall through to the DB path for the canonical check.
+            user_id = _verify_login_db(body.email, body.password)
         else:
             # In-memory hash matched — but it might be stale on another worker.
             # Verify the DB hasn't moved on (e.g. password reset hit a different worker).
@@ -315,33 +345,10 @@ async def login(body: LoginRequest):
                     engine.dispose()
     else:
         # Fall back to database check
-        import os
-        from sqlalchemy import create_engine, text
-        dsn = os.getenv("DATABASE_URL", "")
-        if not dsn:
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_dsn)
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(
-                    text("SELECT id, hashed_password FROM users WHERE email = :email"),
-                    {"email": body.email},
-                ).fetchone()
-                if result is None:
-                    raise HTTPException(status_code=401, detail="Invalid email or password")
-                user_id = str(result[0])
-                db_hash = result[1]
-            if not verify_password(body.password, db_hash):
-                raise HTTPException(status_code=401, detail="Invalid email or password")
-            # Re-populate in-memory store for subsequent requests
-            _users[user_id] = {"id": user_id, "email": body.email, "password_hash": db_hash}
-            _email_to_id[body.email] = user_id
-        finally:
-            engine.dispose()
+        user_id = _verify_login_db(body.email, body.password)
 
-    access_token = create_access_token(user_id)
-    refresh_token = create_refresh_token(user_id)
+    access_token = create_access_token(str(user_id))
+    refresh_token = create_refresh_token(str(user_id))
 
     # Determine if this is a first-time login (no profile, no resumes)
     is_new_user = True

@@ -19,7 +19,7 @@ def generate_cover_letter(profile: dict, job: dict) -> str:
 
     Args:
         profile: User profile dict with keys: full_name, skills, experience_years,
-                 summary, target_roles, preferred_locations
+                 summary, preferred_roles, preferred_locations
         job: Job posting dict with keys: title, company, location, description,
              skills, experience_required, employment_type
 
@@ -30,7 +30,7 @@ def generate_cover_letter(profile: dict, job: dict) -> str:
     skills = profile.get("skills", [])
     exp_years = profile.get("experience_years", 0)
     summary = profile.get("summary", "")
-    target_roles = profile.get("target_roles", [])
+    preferred_roles = profile.get("preferred_roles", [])
     locations = profile.get("preferred_locations", [])
 
     job_title = job.get("title", "the position")
@@ -66,8 +66,8 @@ def generate_cover_letter(profile: dict, job: dict) -> str:
 
     # Build role alignment
     role_section = ""
-    if target_roles:
-        role_section = f"I am actively seeking {' and '.join(target_roles[:2])} opportunities. "
+    if preferred_roles:
+        role_section = f"I am actively seeking {' and '.join(preferred_roles[:2])} opportunities. "
 
     # Build location sentence
     loc_str = ""

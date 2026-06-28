@@ -137,7 +137,7 @@ class OnboardingProfileRequest(BaseModel):
     experience: Optional[list] = None
     education: Optional[list] = None
     preferred_location: Optional[str] = None
-    target_roles: Optional[list] = None
+    preferred_roles: Optional[list] = None
     current_role: Optional[str] = None
     total_years_experience: Optional[float] = None
 
@@ -265,7 +265,7 @@ async def quick_setup_profile(
                 return {"message": "Nothing to update", "user_id": user_id}
 
             # Serialize JSON fields
-            json_fields = ("skills", "experience", "education", "target_roles")
+            json_fields = ("skills", "experience", "education", "preferred_roles")
             for field in json_fields:
                 if field in data and data[field] is not None:
                     data[field] = json.dumps(data[field])

@@ -50,7 +50,7 @@ class UpdateProfileRequest(BaseModel):
     experience: Optional[list] = None
     education: Optional[list] = None
     preferred_location: Optional[str] = None
-    target_roles: Optional[list] = None
+    preferred_roles: Optional[list] = None
     current_role: Optional[str] = None
     total_years_experience: Optional[float] = None
 
@@ -76,7 +76,7 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
                 "skills": [],
                 "experience": [],
                 "education": [],
-                "target_roles": [],
+                "preferred_roles": [],
                 "preferred_location": "",
                 "current_role": "",
                 "total_years_experience": 0,
@@ -101,7 +101,7 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
             "skills": _parse_json(row.get("skills")),
             "experience": _parse_json(row.get("experience")),
             "education": _parse_json(row.get("education")),
-            "target_roles": _parse_json(row.get("target_roles")),
+            "preferred_roles": _parse_json(row.get("preferred_roles")),
             "preferred_location": row.get("preferred_location", "") or "",
             "current_role": row.get("current_role", "") or "",
             "total_years_experience": row.get("total_years_experience", 0) or 0,
@@ -132,7 +132,7 @@ async def update_profile(
             set_clauses = []
             params: dict[str, Any] = {"uid": uid}
             for key, value in data.items():
-                if key in ("skills", "experience", "education", "target_roles"):
+                if key in ("skills", "experience", "education", "preferred_roles"):
                     value = json.dumps(value)
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
@@ -145,7 +145,7 @@ async def update_profile(
             cols = ["id", "user_id"]
             params = {"id": new_id, "user_id": uid}
             for key, value in data.items():
-                if key in ("skills", "experience", "education", "target_roles"):
+                if key in ("skills", "experience", "education", "preferred_roles"):
                     value = json.dumps(value)
                 cols.append(key)
                 params[key] = value
@@ -184,7 +184,7 @@ async def update_profile(
             "skills": _parse_json(row.get("skills")) if row else [],
             "experience": _parse_json(row.get("experience")) if row else [],
             "education": _parse_json(row.get("education")) if row else [],
-            "target_roles": _parse_json(row.get("target_roles")) if row else [],
+            "preferred_roles": _parse_json(row.get("preferred_roles")) if row else [],
             "preferred_location": (row.get("preferred_location", "") or "") if row else "",
             "current_role": (row.get("current_role", "") or "") if row else "",
             "total_years_experience": (row.get("total_years_experience", 0) or 0) if row else 0,

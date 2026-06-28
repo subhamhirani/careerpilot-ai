@@ -104,7 +104,7 @@ async def approve_application(
         text("""
             UPDATE pending_approvals
             SET status = 'approved', reviewed_at = NOW()
-            WHERE id = :aid AND user_id = :uid AND status = 'pending'
+            WHERE id = :aid AND user_id = :uid AND status = 'PENDING'
             RETURNING entity_id, entity_type
         """),
         {"aid": _to_uuid(approval_id), "uid": uid},
@@ -144,7 +144,7 @@ async def reject_application(
         text("""
             UPDATE pending_approvals
             SET status = 'rejected', reviewed_at = NOW()
-            WHERE id = :aid AND user_id = :uid AND status = 'pending'
+            WHERE id = :aid AND user_id = :uid AND status = 'PENDING'
         """),
         {"aid": _to_uuid(approval_id), "uid": _to_uuid(user_id)},
     )

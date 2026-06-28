@@ -75,7 +75,7 @@ async def generate(
         profile_row = session.execute(
             text(
                 "SELECT full_name, skills, experience, summary, "
-                "preferred_location, target_roles "
+                "preferred_location, preferred_roles "
                 "FROM user_profiles WHERE user_id = :uid"
             ),
             {"uid": uid},
@@ -97,13 +97,13 @@ async def generate(
                     if isinstance(v, list):
                         skills.extend(v)
 
-        target_roles = []
-        if profile_row.get("target_roles"):
-            r = profile_row["target_roles"]
+        preferred_roles = []
+        if profile_row.get("preferred_roles"):
+            r = profile_row["preferred_roles"]
             if isinstance(r, str):
                 r = json.loads(r)
             if isinstance(r, list):
-                target_roles = r
+                preferred_roles = r
 
         exp_years = 0.0
         if profile_row.get("experience"):
@@ -122,7 +122,7 @@ async def generate(
             "skills": skills,
             "experience_years": exp_years,
             "summary": profile_row.get("summary", ""),
-            "target_roles": target_roles,
+            "preferred_roles": preferred_roles,
             "preferred_locations": [profile_row["preferred_location"]] if profile_row.get("preferred_location") else [],
         }
 
@@ -207,7 +207,7 @@ async def list_cover_letters(
             query += " AND job_posting_id = :jid"
             params["jid"] = _to_uuid(job_id)
 
-        query += " ORDER BY generated_at DESC LIMIT :limit"
+        query += " ORDER BY created_at DESC LIMIT :limit"
         params["limit"] = limit
 
         rows = session.execute(text(query), params).mappings().all()
@@ -219,7 +219,7 @@ async def list_cover_letters(
                 "job_posting_id": str(row["job_posting_id"]) if row.get("job_posting_id") else None,
                 "content": row.get("content", ""),
                 "tone": row.get("tone", "formal"),
-                "generated_at": row["generated_at"].isoformat() if row.get("generated_at") else None,
+                "generated_at": row["created_at"].isoformat() if row.get("created_at") else None,
             })
 
         return {"cover_letters": results, "total": len(results)}
@@ -249,7 +249,7 @@ async def get_cover_letter(
             "job_posting_id": str(row["job_posting_id"]) if row.get("job_posting_id") else None,
             "content": row.get("content", ""),
             "tone": row.get("tone", "formal"),
-            "generated_at": row["generated_at"].isoformat() if row.get("generated_at") else None,
+            "generated_at": row["created_at"].isoformat() if row.get("created_at") else None,
         }
     finally:
         session.close()

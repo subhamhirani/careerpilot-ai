@@ -600,7 +600,7 @@ def send_daily_digest(self) -> dict:
                 ).scalar() or 0
 
                 pending = session.execute(
-                    text("SELECT COUNT(*) FROM approvals WHERE status = 'pending'")
+                    text("SELECT COUNT(*) FROM approvals WHERE status = 'PENDING'")
                 ).scalar() or 0
 
                 top_rows = session.execute(
