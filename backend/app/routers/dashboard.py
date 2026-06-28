@@ -67,12 +67,12 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
     try:
         rows = db.execute(
             text(
-                "SELECT jp.id, jp.title, COALESCE(c.name, '') as company, ms.score "
+                "SELECT jp.id, jp.title, COALESCE(c.name, '') as company, ms.overall_score "
                 "FROM match_scores ms "
                 "JOIN job_postings jp ON ms.job_posting_id = jp.id "
                 "LEFT JOIN companies c ON jp.company_id = c.id "
                 "WHERE ms.user_id = :uid "
-                "ORDER BY ms.score DESC NULLS LAST "
+                "ORDER BY ms.overall_score DESC NULLS LAST "
                 "LIMIT 5"
             ),
             {"uid": uid},
@@ -86,6 +86,7 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
                 "match_score": row[3] or 0,
             })
     except Exception:
+        db.rollback()
         pass
 
     # Recent activity from process_statuses
@@ -106,6 +107,7 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
                 "timestamp": row[3].isoformat() if row[3] else datetime.now(timezone.utc).isoformat(),
             })
     except Exception:
+        db.rollback()
         pass
 
     if not recent_activity:
@@ -127,7 +129,7 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
     interview_rate = 0.0
     if app_count > 0:
         interview_count = db.execute(
-            text("SELECT COUNT(*) FROM applications WHERE user_id = :uid AND status IN ('interview', 'offer')"),
+            text("SELECT COUNT(*) FROM applications WHERE user_id = :uid AND status IN ('INTERVIEW', 'OFFER')"),
             {"uid": uid},
         ).scalar() or 0
         interview_rate = round((interview_count / app_count) * 100, 1)
@@ -144,7 +146,7 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
     ).scalar() or 0
 
     last_scrape = db.execute(
-        text("SELECT MAX(discovered_at) FROM job_postings"),
+        text("SELECT MAX(created_at) FROM job_postings"),
     ).scalar()
     last_scrape_iso = last_scrape.isoformat() if last_scrape else None
 
