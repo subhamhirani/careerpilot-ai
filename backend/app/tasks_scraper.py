@@ -468,4 +468,4 @@ def _grade_from_score(score: float) -> str:
     elif score >= 40:
         return "FAIR"
     else:
-        return "poor"
+        return "POOR"
