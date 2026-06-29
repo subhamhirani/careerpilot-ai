@@ -132,14 +132,13 @@ def _user_has_api_keys(user_id: str) -> bool:
 class OnboardingProfileRequest(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    headline: Optional[str] = None
     summary: Optional[str] = None
     skills: Optional[list] = None
     experience: Optional[list] = None
     education: Optional[list] = None
     preferred_location: Optional[str] = None
     preferred_roles: Optional[list] = None
-    current_role: Optional[str] = None
-    total_years_experience: Optional[float] = None
 
 
 # ── Routes ──────────────────────────────────────────────────

@@ -327,8 +327,8 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             # Load user profile
             profile_row = session.execute(
                 text(
-                    "SELECT full_name, skills, experience, summary, "
-                    "preferred_location, preferred_roles, total_years_experience "
+                    "SELECT full_name, headline, skills, experience, summary, "
+                    "preferred_location, preferred_roles "
                     "FROM user_profiles WHERE user_id = :uid"
                 ),
                 {"uid": user_id},
@@ -367,7 +367,7 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             if profile_row.get("preferred_location"):
                 preferred_locs = [profile_row["preferred_location"]]
 
-            exp_years = float(profile_row.get("total_years_experience", 0) or 0)
+            exp_years = 0
 
             profile = UserProfile(
                 full_name=profile_row.get("full_name", ""),
@@ -400,11 +400,11 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             jobs = session.execute(
                 text(
                     "SELECT jp.id, jp.title, jp.location, jp.description, "
-                    "jp.source, jp.url "
+                    "jp.source, jp.source_url "
                     "FROM job_postings jp "
                     "LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid "
                     "WHERE ms.id IS NULL AND jp.status = 'new' "
-                    "ORDER BY jp.discovered_at DESC "
+                    "ORDER BY jp.created_at DESC "
                     "LIMIT 200"
                 ),
                 {"uid": user_id},
@@ -418,7 +418,7 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                     "description": job.get("description", ""),
                     "employment_type": "",
                     "source": job.get("source", ""),
-                    "url": job.get("url", ""),
+                    "url": job.get("source_url", ""),
                 }
 
                 relevance = score_job(profile, job_dict)
@@ -427,25 +427,21 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                     text(
                         """
                         INSERT INTO match_scores
-                            (user_id, job_posting_id, score, tier, reasons_json,
-                             missing_skills_json, risk_indicators_json)
+                            (user_id, job_posting_id, overall_score, grade, details)
                         VALUES
-                            (:uid, :jid, :score, :tier, :reasons,
-                             :missing, :risk)
+                            (:uid, :jid, :overall_score, :grade, :details)
                         ON CONFLICT (user_id, job_posting_id) DO UPDATE SET
-                            score = EXCLUDED.score,
-                            tier = EXCLUDED.tier,
-                            reasons_json = EXCLUDED.reasons_json
+                            overall_score = EXCLUDED.overall_score,
+                            grade = EXCLUDED.grade,
+                            details = EXCLUDED.details
                         """
                     ),
                     {
                         "uid": user_id,
                         "jid": str(job["id"]),
-                        "score": int(round(relevance.get("total_score", 0))),
-                        "tier": _tier_from_score(relevance.get("total_score", 0)),
-                        "reasons": json.dumps(relevance, ensure_ascii=False),
-                        "missing": json.dumps(relevance.get("missing_skills", []), ensure_ascii=False),
-                        "risk": json.dumps(relevance.get("risk_indicators", []), ensure_ascii=False),
+                        "overall_score": float(relevance.get("total_score", 0)),
+                        "grade": _grade_from_score(relevance.get("total_score", 0)),
+                        "details": json.dumps(relevance, ensure_ascii=False),
                     },
                 )
                 scored += 1
@@ -463,13 +459,13 @@ def run_relevance_scoring(self, user_id: str) -> dict:
         raise self.retry(exc=exc)
 
 
-def _tier_from_score(score: float) -> str:
-    """Convert numeric score to tier."""
+def _grade_from_score(score: float) -> str:
+    """Convert numeric score to grade."""
     if score >= 80:
-        return "excellent"
+        return "EXCELLENT"
     elif score >= 60:
-        return "good"
+        return "GOOD"
     elif score >= 40:
-        return "fair"
+        return "FAIR"
     else:
         return "poor"

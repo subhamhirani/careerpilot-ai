@@ -595,55 +595,35 @@ async def store_match_scores(
             logger.info("MATCH: %s | %.1f | %s", s.job_title, s.total_score, s.tier)
         return 0
 
-    ddl = """
-    CREATE TABLE IF NOT EXISTS careerpilot_match_scores (
-        id              BIGSERIAL PRIMARY KEY,
-        user_id         TEXT NOT NULL,
-        job_hash_key    TEXT NOT NULL,
-        job_title       TEXT NOT NULL,
-        company         TEXT NOT NULL DEFAULT '',
-        phase_1_similarity DOUBLE PRECISION DEFAULT 0.0,
-        skills_score    DOUBLE PRECISION DEFAULT 0.0,
-        semantic_score  DOUBLE PRECISION DEFAULT 0.0,
-        experience_score DOUBLE PRECISION DEFAULT 0.0,
-        location_score  DOUBLE PRECISION DEFAULT 0.0,
-        tech_stack_score DOUBLE PRECISION DEFAULT 0.0,
-        seniority_score DOUBLE PRECISION DEFAULT 0.0,
-        salary_score    DOUBLE PRECISION DEFAULT 0.0,
-        total_score     DOUBLE PRECISION DEFAULT 0.0,
-        tier            TEXT NOT NULL DEFAULT 'Weak',
-        match_reason    TEXT DEFAULT '',
-        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE(user_id, job_hash_key)
-    );
-    """
-
     conn = await asyncpg.connect(dsn)
     try:
-        await conn.execute(ddl)
         count = 0
         for s in scores:
             try:
+                # Look up the job_posting UUID from hash_key
+                row = await conn.fetchrow(
+                    "SELECT id FROM job_postings WHERE hash_key = $1 LIMIT 1",
+                    s.job_hash_key,
+                )
+                if not row:
+                    logger.warning("No job_posting found for hash %s, skipping", s.job_hash_key)
+                    continue
+                job_id = str(row["id"])
                 await conn.execute(
                     """
-                    INSERT INTO careerpilot_match_scores
-                        (user_id, job_hash_key, job_title, company,
-                         phase_1_similarity, skills_score, semantic_score,
-                         experience_score, location_score, tech_stack_score,
-                         seniority_score, salary_score, total_score, tier,
-                         match_reason)
+                    INSERT INTO match_scores
+                        (user_id, job_posting_id, overall_score, grade, details)
                     VALUES
-                        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-                    ON CONFLICT (user_id, job_hash_key) DO UPDATE SET
-                        total_score = EXCLUDED.total_score,
-                        tier = EXCLUDED.tier,
-                        match_reason = EXCLUDED.match_reason
+                        ($1, $2, $3, $4, $5)
+                    ON CONFLICT (user_id, job_posting_id) DO UPDATE SET
+                        overall_score = EXCLUDED.overall_score,
+                        grade = EXCLUDED.grade,
+                        details = EXCLUDED.details
                     """,
-                    s.user_id, s.job_hash_key, s.job_title, s.company,
-                    s.phase_1_similarity, s.skills_score, s.semantic_score,
-                    s.experience_score, s.location_score, s.tech_stack_score,
-                    s.seniority_score, s.salary_score, s.total_score, s.tier,
-                    s.match_reason,
+                    s.user_id, job_id,
+                    float(s.total_score),
+                    "GOOD" if s.total_score >= 60 else "FAIR",
+                    json.dumps({"title": s.job_title, "company": s.company, "score": s.total_score, "tier": s.tier}),
                 )
                 count += 1
             except Exception as exc:

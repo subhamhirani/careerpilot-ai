@@ -180,7 +180,7 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                 text(
                     "UPDATE user_profiles SET full_name = :name, phone = :phone, summary = :summary, "
                     "skills = :skills, experience = :exp, education = :edu, "
-                    "total_years_experience = :years, \"current_role\" = :role, preferred_roles = :targets, "
+                    "preferred_roles = :targets, "
                     "preferred_location = :locs, updated_at = NOW() WHERE user_id = :uid"
                 ),
                 {
@@ -191,8 +191,6 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                     "skills": skills_val,
                     "exp": exp_val,
                     "edu": edu_val,
-                    "years": profile.total_years_experience,
-                    "role": profile.current_role or "",
                     "targets": targets_val,
                     "locs": locs_val,
                 },
