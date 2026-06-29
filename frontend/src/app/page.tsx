@@ -196,6 +196,20 @@ export default function DashboardPage() {
   const { stats, setStats, loading, setLoading } = useDashboardStore();
   const [authorized, setAuthorized] = useState(false);
 
+  // All hooks must be called unconditionally (before any early return)
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api.get<DashboardStats>('/dashboard/stats'),
+    enabled: authorized,  // only fetch once authorized
+  });
+
+  useEffect(() => {
+    if (data) {
+      setStats(data);
+    }
+    setLoading(isLoading);
+  }, [data, isLoading, setStats, setLoading]);
+
   // Only render dashboard for authenticated users
   useEffect(() => {
     const token = localStorage.getItem('careerpilot_token');
@@ -209,18 +223,6 @@ export default function DashboardPage() {
   if (!authorized) {
     return null;
   }
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: () => api.get<DashboardStats>('/dashboard/stats'),
-  });
-
-  useEffect(() => {
-    if (data) {
-      setStats(data);
-    }
-    setLoading(isLoading);
-  }, [data, isLoading, setStats, setLoading]);
 
   if (loading && !stats) {
     return (

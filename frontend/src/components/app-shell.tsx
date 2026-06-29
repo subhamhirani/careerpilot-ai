@@ -23,6 +23,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (p) => pathname === p || pathname.startsWith(p + '/')
   );
 
+  // Redirect unauthenticated users away from protected routes
+  useEffect(() => {
+    if (isClient && !isAuthenticated && !isPublicPath) {
+      router.push('/login');
+    }
+  }, [isClient, isAuthenticated, isPublicPath, router]);
+
   // SERVER-SIDE: Before client mount, check auth from context
   // On first SSR render, isAuthenticated is false (no localStorage yet)
   // So we render nothing to prevent shell leak
@@ -36,12 +43,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (isClient && !isAuthenticated && !isPublicPath) {
-      router.push('/login');
-    }
-  }, [isClient, isAuthenticated, isPublicPath, router]);
 
   // For public routes, render children directly
   if (isPublicPath) {
