@@ -39,7 +39,7 @@ def _to_uuid(value) -> uuid.UUID:
 
 @router.get("/")
 async def list_pending_approvals(
-    status: str | None = "pending",
+    status: str | None = "PENDING",
     limit: int = 20,
     offset: int = 0,
     user_id: str = Depends(get_current_user_id),
@@ -52,7 +52,7 @@ async def list_pending_approvals(
 
     if status:
         conditions.append("pa.status = :status")
-        params["status"] = status
+        params["status"] = status.upper()
 
     where = " AND ".join(conditions)
 
@@ -103,7 +103,7 @@ async def approve_application(
     result = db.execute(
         text("""
             UPDATE pending_approvals
-            SET status = 'approved', reviewed_at = NOW()
+            SET status = 'APPROVED', reviewed_at = NOW()
             WHERE id = :aid AND user_id = :uid AND status = 'PENDING'
             RETURNING entity_id, entity_type
         """),
@@ -118,8 +118,8 @@ async def approve_application(
     app_id = str(uuid.uuid4())
     db.execute(
         text("""
-            INSERT INTO applications (id, user_id, job_posting_id, status, method)
-            VALUES (:aid, :uid, :jid, 'draft', 'automated')
+            INSERT INTO applications (id, user_id, job_posting_id, status)
+            VALUES (:aid, :uid, :jid, 'DRAFT')
         """),
         {"aid": app_id, "uid": uid, "jid": job_id},
     )
@@ -143,7 +143,7 @@ async def reject_application(
     result = db.execute(
         text("""
             UPDATE pending_approvals
-            SET status = 'rejected', reviewed_at = NOW()
+            SET status = 'REJECTED', reviewed_at = NOW()
             WHERE id = :aid AND user_id = :uid AND status = 'PENDING'
         """),
         {"aid": _to_uuid(approval_id), "uid": _to_uuid(user_id)},

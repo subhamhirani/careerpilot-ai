@@ -53,7 +53,7 @@ async def list_matches(
     rows = db.execute(
         text(f"""
             SELECT ms.id, ms.job_posting_id, ms.overall_score, ms.grade,
-                   ms.details, ms.computed_at,
+                   ms.details, ms.created_at,
                    jp.title, jp.location, c.name as company_name
             FROM match_scores ms
             JOIN job_postings jp ON ms.job_posting_id = jp.id
@@ -96,7 +96,7 @@ async def get_match(match_id: str, user_id: str = Depends(get_current_user_id), 
         text("""
             SELECT ms.id, ms.job_posting_id, ms.overall_score, ms.grade,
                    ms.details,
-                   ms.computed_at, jp.title, jp.description, jp.location, jp.source_url,
+                   ms.created_at, jp.title, jp.description, jp.location, jp.source_url,
                    c.name as company_name
             FROM match_scores ms
             JOIN job_postings jp ON ms.job_posting_id = jp.id
@@ -130,7 +130,7 @@ async def get_match(match_id: str, user_id: str = Depends(get_current_user_id), 
             "description": row[7],
             "location": row[8],
             "url": row[9],
-            "company": row[12] or "Unknown",
+            "company": row[10] or "Unknown",
         },
     }
 

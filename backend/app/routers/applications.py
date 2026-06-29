@@ -52,7 +52,7 @@ async def list_applications(
 
     if status:
         conditions.append("a.status = :status")
-        params["status"] = status
+        params["status"] = status.upper()
 
     where = " AND ".join(conditions)
 
@@ -97,6 +97,36 @@ async def list_applications(
     return {"data": applications, "total": total, "page": (offset // limit) + 1, "page_size": limit}
 
 
+@router.get("/stats")
+async def application_stats(user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
+    """Get aggregate application statistics."""
+    stats = db.execute(
+        text("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE status = 'SUBMITTED') as submitted,
+                COUNT(*) FILTER (WHERE status = 'DRAFT') as in_progress,
+                COUNT(*) FILTER (WHERE status = 'REVIEWING') as replied,
+                COUNT(*) FILTER (WHERE status = 'INTERVIEW') as interview,
+                COUNT(*) FILTER (WHERE status = 'REJECTED') as rejected,
+                COUNT(*) FILTER (WHERE status = 'OFFER') as accepted
+            FROM applications
+            WHERE user_id = :uid
+        """),
+        {"uid": _to_uuid(user_id)},
+    ).fetchone()
+
+    return {
+        "total": stats[0] or 0,
+        "submitted": stats[1] or 0,
+        "in_progress": stats[2] or 0,
+        "replied": stats[3] or 0,
+        "interview": stats[4] or 0,
+        "rejected": stats[5] or 0,
+        "accepted": stats[6] or 0,
+    }
+
+
 @router.get("/{application_id}")
 async def get_application(
     application_id: str,
@@ -138,32 +168,3 @@ async def get_application(
         },
     }
 
-
-@router.get("/stats")
-async def application_stats(user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
-    """Get aggregate application statistics."""
-    stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE status = 'submitted') as submitted,
-                COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-                COUNT(*) FILTER (WHERE status = 'replied') as replied,
-                COUNT(*) FILTER (WHERE status = 'interview') as interview,
-                COUNT(*) FILTER (WHERE status = 'rejected') as rejected,
-                COUNT(*) FILTER (WHERE status = 'accepted') as accepted
-            FROM applications
-            WHERE user_id = :uid
-        """),
-        {"uid": _to_uuid(user_id)},
-    ).fetchone()
-
-    return {
-        "total": stats[0] or 0,
-        "submitted": stats[1] or 0,
-        "in_progress": stats[2] or 0,
-        "replied": stats[3] or 0,
-        "interview": stats[4] or 0,
-        "rejected": stats[5] or 0,
-        "accepted": stats[6] or 0,
-    }

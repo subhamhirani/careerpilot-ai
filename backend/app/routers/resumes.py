@@ -5,21 +5,69 @@ Endpoints for uploading, listing, and managing resumes.
 """
 
 from __future__ import annotations
+
+import datetime
 import os
 import uuid
-import shutil
-import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from ..auth import get_current_user_id
-from ..state import get_resumes, add_resume, remove_resume
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
-# In-memory resume store (per container lifetime)
 UPLOAD_DIR = "/app/storage/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _get_db():
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL not set")
+    sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
+    engine = create_engine(sync_dsn)
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
+
+
+def _to_uuid(value: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid resume id")
+
+
+def _serialize_resume(row) -> dict:
+    file_path = row[2] or ""
+    file_type = (row[4] or "").lower()
+    content_type = (
+        "application/pdf"
+        if file_type == "pdf"
+        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    file_size = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
+    return {
+        "id": str(row[0]),
+        "user_id": str(row[1]),
+        "file_path": file_path,
+        "name": row[3] or "Resume",
+        "title": row[3] or "Resume",
+        "file_type": (row[4] or "pdf").upper(),
+        "content_type": content_type,
+        "file_size": file_size,
+        "size": file_size,
+        "is_active": bool(row[5]),
+        "status": "uploaded",
+        "skills": [],
+        "created_at": row[6].isoformat() if row[6] else None,
+        "updated_at": row[7].isoformat() if row[7] else None,
+    }
 
 
 @router.post("/upload")
@@ -27,66 +75,71 @@ async def upload_resume(
     file: UploadFile = File(...),
     name: str = "",
     user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
 ):
-    """Upload a new resume (PDF or DOCX)."""
+    """Upload a new resume (PDF or DOCX) and persist metadata in PostgreSQL."""
     if file.content_type not in (
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
 
-    # Read file content
     content = await file.read()
     file_size = len(content)
-    resume_id = str(uuid.uuid4())
+    resume_id = uuid.uuid4()
+    uid = uuid.UUID(user_id)
     ext = "pdf" if file.content_type == "application/pdf" else "docx"
-    stored_filename = f"{resume_id}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, stored_filename)
+    title = name or (file.filename or "untitled").rsplit(".", 1)[0]
+    filepath = os.path.join(UPLOAD_DIR, f"{resume_id}.{ext}")
 
-    # Save to disk
     with open(filepath, "wb") as f:
         f.write(content)
 
-    # Determine if this should be the active resume (first for the user)
-    user_resumes = [r for r in get_resumes() if r["user_id"] == user_id]
-    is_active = len(user_resumes) == 0
+    existing_count = db.execute(
+        text("SELECT COUNT(*) FROM resumes WHERE user_id = :uid"), {"uid": uid}
+    ).scalar() or 0
+    is_active = existing_count == 0
 
-    resume_record = {
-        "id": resume_id,
-        "user_id": user_id,
-        "name": name or (file.filename or "untitled").rsplit(".", 1)[0],
-        "file_type": ext.upper(),
-        "file_size": file_size,
-        "file_path": filepath,
-        "content_type": file.content_type,
-        "is_active": is_active,
-        "skills": [],
-        "status": "uploaded",
-        "created_at": datetime.datetime.utcnow().isoformat(),
-        "updated_at": datetime.datetime.utcnow().isoformat(),
-    }
-    add_resume(resume_record)
+    db.execute(
+        text(
+            """
+            INSERT INTO resumes (id, user_id, file_path, title, file_type, is_active)
+            VALUES (:id, :uid, :file_path, :title, :file_type, :is_active)
+            """
+        ),
+        {
+            "id": resume_id,
+            "uid": uid,
+            "file_path": filepath,
+            "title": title,
+            "file_type": ext.upper(),
+            "is_active": is_active,
+        },
+    )
+    db.commit()
 
-    # Trigger async resume processing pipeline
     try:
         from app.tasks_resume import process_resume
         import logging as _logging
-        _logging.getLogger(__name__).info("Dispatching process_resume task for resume_id=%s", resume_id)
+
+        _logging.getLogger(__name__).info(
+            "Dispatching process_resume task for resume_id=%s", resume_id
+        )
         result = process_resume.delay(
-            resume_id=resume_id,
+            resume_id=str(resume_id),
             file_path=filepath,
             user_id=user_id,
         )
         _logging.getLogger(__name__).info("process_resume task dispatched: %s", result.id)
     except Exception as task_err:
-        # Don't fail the upload if task dispatch fails
         import logging
+
         logging.getLogger(__name__).warning(
             "Failed to dispatch process_resume task: %s", task_err
         )
 
     return {
-        "id": resume_id,
+        "id": str(resume_id),
         "filename": file.filename,
         "content_type": file.content_type,
         "size": file_size,
@@ -96,36 +149,72 @@ async def upload_resume(
 
 
 @router.get("/")
-async def list_resumes(user_id: str = Depends(get_current_user_id)):
+async def list_resumes(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
     """List all uploaded resumes for the current user."""
-    all_resumes = get_resumes()
-    user_resumes = [r for r in all_resumes if r["user_id"] == user_id]
-    # Return newest first
-    user_resumes.sort(key=lambda r: r["created_at"], reverse=True)
-    return {"resumes": user_resumes, "total": len(user_resumes)}
+    rows = db.execute(
+        text(
+            """
+            SELECT id, user_id, file_path, title, file_type, is_active, created_at, updated_at
+            FROM resumes
+            WHERE user_id = :uid
+            ORDER BY created_at DESC
+            """
+        ),
+        {"uid": uuid.UUID(user_id)},
+    ).fetchall()
+    resumes = [_serialize_resume(r) for r in rows]
+    return {"resumes": resumes, "total": len(resumes)}
 
 
 @router.get("/{resume_id}")
-async def get_resume(resume_id: str, user_id: str = Depends(get_current_user_id)):
+async def get_resume(
+    resume_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
     """Get a specific resume's details."""
-    for r in get_resumes():
-        if r["id"] == resume_id and r["user_id"] == user_id:
-            return r
-    raise HTTPException(status_code=404, detail="Resume not found")
+    row = db.execute(
+        text(
+            """
+            SELECT id, user_id, file_path, title, file_type, is_active, created_at, updated_at
+            FROM resumes
+            WHERE id = :rid AND user_id = :uid
+            """
+        ),
+        {"rid": _to_uuid(resume_id), "uid": uuid.UUID(user_id)},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return _serialize_resume(row)
 
 
 @router.delete("/{resume_id}")
-async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user_id)):
+async def delete_resume(
+    resume_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
     """Delete a resume."""
-    resumes_list = get_resumes()
-    for i, r in enumerate(resumes_list):
-        if r["id"] == resume_id and r["user_id"] == user_id:
-            filepath = r.get("file_path", "")
-            if filepath and os.path.exists(filepath):
-                os.remove(filepath)
-            resumes_list.pop(i)
-            return {"message": "Resume deleted successfully"}
-    raise HTTPException(status_code=404, detail="Resume not found")
+    row = db.execute(
+        text("SELECT file_path FROM resumes WHERE id = :rid AND user_id = :uid"),
+        {"rid": _to_uuid(resume_id), "uid": uuid.UUID(user_id)},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    filepath = row[0] or ""
+    if filepath and os.path.exists(filepath):
+        os.remove(filepath)
+
+    db.execute(
+        text("DELETE FROM resumes WHERE id = :rid AND user_id = :uid"),
+        {"rid": _to_uuid(resume_id), "uid": uuid.UUID(user_id)},
+    )
+    db.commit()
+    return {"message": "Resume deleted successfully"}
 
 
 @router.patch("/{resume_id}")
@@ -133,37 +222,52 @@ async def update_resume(
     resume_id: str,
     update: dict,
     user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
 ):
     """Update resume fields (e.g., set is_active)."""
-    resumes_list = get_resumes()
-    for r in resumes_list:
-        if r["id"] == resume_id and r["user_id"] == user_id:
-            if "is_active" in update:
-                r["is_active"] = bool(update["is_active"])
-                if r["is_active"]:
-                    # Deactivate all other resumes for this user
-                    for other in resumes_list:
-                        if other["user_id"] == user_id and other["id"] != resume_id:
-                            other["is_active"] = False
-            if "name" in update:
-                r["name"] = str(update["name"])
-            r["updated_at"] = datetime.datetime.utcnow().isoformat()
-            return r
-    raise HTTPException(status_code=404, detail="Resume not found")
+    rid = _to_uuid(resume_id)
+    uid = uuid.UUID(user_id)
+
+    exists = db.execute(
+        text("SELECT 1 FROM resumes WHERE id = :rid AND user_id = :uid"),
+        {"rid": rid, "uid": uid},
+    ).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    if "is_active" in update:
+        is_active = bool(update["is_active"])
+        if is_active:
+            db.execute(text("UPDATE resumes SET is_active = FALSE WHERE user_id = :uid"), {"uid": uid})
+        db.execute(
+            text("UPDATE resumes SET is_active = :active, updated_at = NOW() WHERE id = :rid AND user_id = :uid"),
+            {"active": is_active, "rid": rid, "uid": uid},
+        )
+
+    if "name" in update or "title" in update:
+        title = str(update.get("name") or update.get("title"))
+        db.execute(
+            text("UPDATE resumes SET title = :title, updated_at = NOW() WHERE id = :rid AND user_id = :uid"),
+            {"title": title, "rid": rid, "uid": uid},
+        )
+
+    db.commit()
+    return await get_resume(resume_id, user_id, db)
 
 
 @router.get("/{resume_id}/download")
-async def download_resume(resume_id: str, user_id: str = Depends(get_current_user_id)):
+async def download_resume(
+    resume_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
     """Download a resume file."""
-    for r in get_resumes():
-        if r["id"] == resume_id and r["user_id"] == user_id:
-            filepath = r.get("file_path", "")
-            if not filepath or not os.path.exists(filepath):
-                raise HTTPException(status_code=404, detail="File not found")
-            from fastapi.responses import FileResponse
-            return FileResponse(
-                filepath,
-                media_type=r.get("content_type", "application/octet-stream"),
-                filename=f"{r['name']}.{r['file_type'].lower()}",
-            )
-    raise HTTPException(status_code=404, detail="Resume not found")
+    resume = await get_resume(resume_id, user_id, db)
+    filepath = resume.get("file_path", "")
+    if not filepath or not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        filepath,
+        media_type=resume.get("content_type", "application/octet-stream"),
+        filename=f"{resume['name']}.{resume['file_type'].lower()}",
+    )
