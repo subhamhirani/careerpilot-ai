@@ -1,7 +1,5 @@
 """
 CareerPilot AI — Jobs API Router.
-
-Endpoints for browsing discovered job postings with filtering.
 """
 
 from __future__ import annotations
@@ -30,7 +28,6 @@ def _get_db():
             yield session
     finally:
         engine.dispose()
-
 
 @router.get("/")
 async def list_jobs(
@@ -98,10 +95,8 @@ async def list_jobs(
     ).scalar()
 
     if not has_scores:
-        # Trigger background scrape + scoring based on user profile
         try:
             from app.tasks_scraper import scrape_and_store_jobs, run_relevance_scoring
-            # Get user's preferred location for scraping
             loc_row = db.execute(
                 text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
                 {"uid": user_id}
@@ -110,9 +105,8 @@ async def list_jobs(
             scrape_and_store_jobs.delay(user_id=user_id, location=scrape_location)
             run_relevance_scoring.delay(user_id=user_id)
         except Exception:
-            pass  # Non-blocking — user will see their jobs once scoring completes
+            pass
 
-    # Fetch jobs sorted by user's match score (highest first), then discovery date
     jobs_sql = f"""
         SELECT jp.id, jp.title, jp.location, jp.source_url, jp.source_platform,
                jp.posted_at, c.name as company_name,
@@ -144,11 +138,40 @@ async def list_jobs(
 
     return {"data": jobs, "total": total, "page": (actual_offset // actual_limit) + 1, "page_size": actual_limit}
 
+# ---------------------------------------------------------------------------
+# New scrape‑status endpoint (exposed under /jobs/scrape-status)
+# ---------------------------------------------------------------------------
+@router.get("/scrape-status", tags=["jobs"])
+async def scrape_status(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
+    """Return latest scrape job counts.
 
-@router.get("/{job_id}")
+    - total_jobs: all jobs with status='new'
+    - linkedin_jobs: jobs sourced from LinkedIn
+    - naukri_jobs: jobs sourced from Naukri
+    - matched_jobs: number of jobs already scored for this user
+    """
+    total = db.execute(text("SELECT COUNT(*) FROM job_postings WHERE status = 'new'")).scalar()
+    linkedin = db.execute(text("SELECT COUNT(*) FROM job_postings WHERE source = 'linkedin'")).scalar()
+    naukri = db.execute(text("SELECT COUNT(*) FROM job_postings WHERE source = 'naukri'")).scalar()
+    matched = db.execute(
+        text("SELECT COUNT(*) FROM match_scores WHERE user_id = :uid"),
+        {"uid": uuid.UUID(user_id)},
+    ).scalar()
+    return {
+        "total_jobs": total,
+        "linkedin_jobs": linkedin,
+        "naukri_jobs": naukri,
+        "matched_jobs": matched,
+    }
+
+# ---------------------------------------------------------------------------
+# Job detail endpoints – must appear after static routes like /scrape-status
+# ---------------------------------------------------------------------------
 async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Get a specific job posting with match details (only if mapped to this user)."""
-    # Verify user owns this job via user_jobs mapping
     row = db.execute(
         text("""
             SELECT jp.id, jp.title, jp.description, jp.location, jp.source_url, jp.source_platform,
@@ -166,7 +189,6 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Get match score for this user
     match = db.execute(
         text("""
             SELECT id, overall_score, grade, details
@@ -200,7 +222,6 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
 
     return result
 
-
 @router.post("/{job_id}/save")
 async def save_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Save a job to user's saved list."""
@@ -210,7 +231,6 @@ async def save_job(job_id: str, user_id: str = Depends(get_current_user_id), db:
     )
     db.commit()
     return {"status": "saved", "job_id": job_id}
-
 
 @router.post("/{job_id}/reject")
 async def reject_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
@@ -222,12 +242,10 @@ async def reject_job(job_id: str, user_id: str = Depends(get_current_user_id), d
     db.commit()
     return {"status": "rejected", "job_id": job_id}
 
-
 @router.post("/{job_id}/apply")
 async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Apply to a job — creates an application record."""
     from uuid import uuid4
-    
     # Check job exists
     job = db.execute(
         text("SELECT id FROM job_postings WHERE id = :jid"),
@@ -236,7 +254,6 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
     if not job:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Job not found")
-    
     # Check not already applied
     existing = db.execute(
         text("SELECT id FROM applications WHERE job_posting_id = :jid AND user_id = :uid LIMIT 1"),
@@ -244,7 +261,6 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
     ).fetchone()
     if existing:
         return {"status": "already_applied", "application_id": str(existing[0])}
-    
     app_id = uuid4()
     db.execute(
         text("""

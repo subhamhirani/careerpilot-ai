@@ -130,7 +130,7 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
             resume_db_id = str(uuid.uuid4())
             session.execute(
                 text(
-                    "INSERT INTO resumes (id, user_id, filename, file_path, file_type, parsed_text, is_active, created_at, updated_at) "
+                    "INSERT INTO resumes (id, user_id, title, file_path, file_type, parsed_text, is_active, created_at, updated_at) "
                     "VALUES (:id, :uid, :title, :fp, :ft, :parsed, true, NOW(), NOW())"
                 ),
                 {

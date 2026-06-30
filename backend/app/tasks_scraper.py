@@ -311,6 +311,13 @@ def scrape_and_store_jobs(
 def run_relevance_scoring(self, user_id: str) -> dict:
     """Score all unscraped jobs against a user's profile.
 
+    Supports two scoring modes controlled by the ``SCORING_METHOD``
+    environment variable (default: ``heuristic``):
+
+      * ``heuristic``  — keyword/skill-based scoring (``job_relevance.score_job``)
+      * ``multi_agent`` — three-agent pipeline with embeddings, web research,
+                          and LLM synthesis (``multi_agent_scoring.MultiAgentScorer``)
+
     Args:
         user_id: UUID of the user to score jobs for.
 
@@ -322,9 +329,10 @@ def run_relevance_scoring(self, user_id: str) -> dict:
     try:
         from app.agents.job_relevance import UserProfile, score_job
 
+        scoring_method = os.getenv("SCORING_METHOD", "heuristic").strip().lower()
         session, engine = _get_db()
         try:
-            # Load user profile
+            # ── Load user profile ──────────────────────────────────
             profile_row = session.execute(
                 text(
                     "SELECT full_name, headline, skills, experience, summary, "
@@ -338,34 +346,35 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                 logger.warning("No profile found for user %s", user_id)
                 return {"scored": 0, "reason": "no_profile"}
 
-            # Build UserProfile
-            skills = []
-            if profile_row.get("skills"):
-                s = profile_row["skills"]
-                if isinstance(s, str):
-                    import json as _json
-                    s = _json.loads(s)
-                if isinstance(s, list):
-                    skills = s
-                elif isinstance(s, dict):
-                    for v in s.values():
+            # Build UserProfile (heuristic path) + profile_dict (multi-agent path)
+            skills: list[str] = []
+            raw_skills = profile_row.get("skills")
+            if raw_skills:
+                if isinstance(raw_skills, str):
+                    import json as _j
+                    raw_skills = _j.loads(raw_skills)
+                if isinstance(raw_skills, list):
+                    skills = raw_skills
+                elif isinstance(raw_skills, dict):
+                    for v in raw_skills.values():
                         if isinstance(v, list):
                             skills.extend(v)
                         elif isinstance(v, str):
                             skills.append(v)
 
-            preferred_roles = []
-            if profile_row.get("preferred_roles"):
-                r = profile_row["preferred_roles"]
-                if isinstance(r, str):
-                    import json as _json
-                    r = _json.loads(r)
-                if isinstance(r, list):
-                    preferred_roles = r
+            preferred_roles: list[str] = []
+            raw_roles = profile_row.get("preferred_roles")
+            if raw_roles:
+                if isinstance(raw_roles, str):
+                    import json as _j
+                    raw_roles = _j.loads(raw_roles)
+                if isinstance(raw_roles, list):
+                    preferred_roles = raw_roles
 
-            preferred_locs = []
-            if profile_row.get("preferred_location"):
-                preferred_locs = [profile_row["preferred_location"]]
+            preferred_locs: list[str] = []
+            raw_loc = profile_row.get("preferred_location")
+            if raw_loc:
+                preferred_locs = [raw_loc]
 
             exp_years = 0
 
@@ -378,8 +387,17 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                 summary=profile_row.get("summary", ""),
             )
 
-            # Ensure all unscored jobs are linked to this user (handles orphaned jobs
-            # scraped by Celery Beat without user context)
+            profile_dict: dict = {
+                "full_name": profile.full_name,
+                "skills": skills,
+                "summary": profile.summary,
+                "preferred_roles": preferred_roles,
+                "preferred_locations": preferred_locs,
+                "total_years_experience": exp_years,
+                "experience_years": exp_years,
+            }
+
+            # ── Link unscored jobs to this user ────────────────────
             session.execute(
                 text("""
                     INSERT INTO user_jobs (user_id, job_posting_id, status)
@@ -396,11 +414,11 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             )
             session.commit()
 
-            # Load unscored jobs
+            # ── Load unscored jobs (include company for multi-agent) ─
             jobs = session.execute(
                 text(
-                    "SELECT jp.id, jp.title, jp.location, jp.description, "
-                    "jp.source, jp.source_url "
+                    "SELECT jp.id, jp.title, jp.company, jp.location, "
+                    "jp.description, jp.source, jp.source_url "
                     "FROM job_postings jp "
                     "LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid "
                     "WHERE ms.id IS NULL AND jp.status = 'new' "
@@ -410,41 +428,17 @@ def run_relevance_scoring(self, user_id: str) -> dict:
                 {"uid": user_id},
             ).mappings().all()
 
+            # ── Route to the chosen scoring method ─────────────────
             scored = 0
-            for job in jobs:
-                job_dict = {
-                    "title": job.get("title", ""),
-                    "location": job.get("location", ""),
-                    "description": job.get("description", ""),
-                    "employment_type": "",
-                    "source": job.get("source", ""),
-                    "url": job.get("source_url", ""),
-                }
 
-                relevance = score_job(profile, job_dict)
-
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO match_scores
-                            (user_id, job_posting_id, overall_score, grade, details)
-                        VALUES
-                            (:uid, :jid, :overall_score, :grade, :details)
-                        ON CONFLICT (user_id, job_posting_id) DO UPDATE SET
-                            overall_score = EXCLUDED.overall_score,
-                            grade = EXCLUDED.grade,
-                            details = EXCLUDED.details
-                        """
-                    ),
-                    {
-                        "uid": user_id,
-                        "jid": str(job["id"]),
-                        "overall_score": float(relevance.get("total_score", 0)),
-                        "grade": _grade_from_score(relevance.get("total_score", 0)),
-                        "details": json.dumps(relevance, ensure_ascii=False),
-                    },
+            if scoring_method == "multi_agent":
+                scored = _score_multi_agent(
+                    session, user_id, profile_dict, jobs,
                 )
-                scored += 1
+            else:
+                scored = _score_heuristic(
+                    session, user_id, profile, jobs,
+                )
 
             session.commit()
         finally:
@@ -457,6 +451,128 @@ def run_relevance_scoring(self, user_id: str) -> dict:
     except Exception as exc:
         logger.exception("run_relevance_scoring failed")
         raise self.retry(exc=exc)
+
+
+def _score_heuristic(
+    session: Session,
+    user_id: str,
+    profile: UserProfile,
+    jobs: list,
+) -> int:
+    """Score jobs using the existing heuristic keyword-based scorer."""
+    from app.agents.job_relevance import score_job
+
+    scored = 0
+    for job in jobs:
+        job_dict = {
+            "title": job.get("title", ""),
+            "location": job.get("location", ""),
+            "description": job.get("description", ""),
+            "company": job.get("company", ""),
+            "employment_type": "",
+            "source": job.get("source", ""),
+            "url": job.get("source_url", ""),
+        }
+        relevance = score_job(profile, job_dict)
+
+        session.execute(
+            text(
+                """
+                INSERT INTO match_scores
+                    (user_id, job_posting_id, overall_score, grade, details)
+                VALUES
+                    (:uid, :jid, :overall_score, :grade, :details)
+                ON CONFLICT (user_id, job_posting_id) DO UPDATE SET
+                    overall_score = EXCLUDED.overall_score,
+                    grade = EXCLUDED.grade,
+                    details = EXCLUDED.details
+                """
+            ),
+            {
+                "uid": user_id,
+                "jid": str(job["id"]),
+                "overall_score": float(relevance.get("total_score", 0)),
+                "grade": _grade_from_score(relevance.get("total_score", 0)),
+                "details": json.dumps(relevance, ensure_ascii=False),
+            },
+        )
+        scored += 1
+    return scored
+
+
+def _score_multi_agent(
+    session: Session,
+    user_id: str,
+    profile_dict: dict,
+    jobs: list,
+) -> int:
+    """Score jobs using the multi-agent pipeline (vector + web + LLM)."""
+    from app.agents.multi_agent_scoring import MultiAgentScorer
+
+    # Build job list in the format MultiAgentScorer expects
+    job_list: list[dict] = []
+    for job in jobs:
+        job_list.append({
+            "id": str(job["id"]),
+            "title": job.get("title", "") or "",
+            "company": job.get("company", "") or "",
+            "location": job.get("location", "") or "",
+            "description": job.get("description", "") or "",
+            "employment_type": "",
+            "work_mode": "",
+            "source": job.get("source", "") or "",
+            "url": job.get("source_url", "") or "",
+        })
+
+    scorer = MultiAgentScorer()
+    results = scorer.score_all(profile_dict, job_list)
+
+    scored = 0
+    for result in results:
+        job_id = result.get("id", "")
+        if not job_id:
+            continue
+
+        total = float(result.get("total_score", 0))
+        grade = result.get("grade", "") or _grade_from_score(total)
+        details = {k: v for k, v in result.items() if k not in (
+            "id", "title", "company", "location", "description",
+            "employment_type", "work_mode", "source", "url",
+            "vector_score", "skills_ratio", "matched_skills", "missing_skills",
+        )}
+        details["matched_skills"] = result.get("matched_skills", [])
+        details["missing_skills"] = result.get("missing_skills", [])
+        details["vector_score"] = result.get("vector_score", 0)
+
+        session.execute(
+            text(
+                """
+                INSERT INTO match_scores
+                    (user_id, job_posting_id, overall_score, grade, details)
+                VALUES
+                    (:uid, :jid, :overall_score, :grade, :details)
+                ON CONFLICT (user_id, job_posting_id) DO UPDATE SET
+                    overall_score = EXCLUDED.overall_score,
+                    grade = EXCLUDED.grade,
+                    details = EXCLUDED.details
+                """
+            ),
+            {
+                "uid": user_id,
+                "jid": job_id,
+                "overall_score": total,
+                "grade": grade,
+                "details": json.dumps(details, ensure_ascii=False),
+            },
+        )
+        scored += 1
+
+    logger.info(
+        "Multi-agent scoring: %d results, %d inserted",
+        len(results),
+        scored,
+    )
+    return scored
 
 
 def _grade_from_score(score: float) -> str:

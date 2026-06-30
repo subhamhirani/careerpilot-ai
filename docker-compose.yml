@@ -5,6 +5,16 @@ x-default-logging: &default-logging
     max-file: "3"
 
 services:
+  resume-agent:
+    build: ./backend/app/agents/resume_matcher
+    command: uvicorn app:app --host 0.0.0.0 --port 8002
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - default
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: careerpilot-postgres

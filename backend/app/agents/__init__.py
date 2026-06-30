@@ -24,6 +24,7 @@ from .resume_tailoring import (
 )
 from .cover_letter import CoverLetterGenerator, run_cover_letter_generation
 from .application import ApplicationSubmitter, PendingApproval, run_application_submission
+from .multi_agent_scoring import MultiAgentScorer, VectorSearchAgent, WebResearchAgent, SynthesisAgent
 
 __all__ = [
     # Agent 1
@@ -57,4 +58,9 @@ __all__ = [
     "ApplicationSubmitter",
     "PendingApproval",
     "run_application_submission",
+    # Multi-Agent Scoring (P0)
+    "MultiAgentScorer",
+    "VectorSearchAgent",
+    "WebResearchAgent",
+    "SynthesisAgent",
 ]

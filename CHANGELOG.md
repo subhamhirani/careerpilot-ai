@@ -15,3 +15,9 @@
 - **Next.js Frontend:** Dashboard, job feed, approvals, analytics, resume management
 - **Database:** PostgreSQL 15 with pgvector, 14 tables, alembic migrations
 - **Infrastructure:** Docker Compose, Caddy reverse proxy, health checks
+
+## 2026-06-30
+
+### Fixed
+
+- **Resume INSERT column mismatch** — `backend/app/tasks_resume.py:133` used column name `filename` in raw SQL INSERT, but migration `97dde6c91118` renamed the column to `title`. This caused `ProgrammingError: column "filename" does not exist` on every resume upload processed by the Celery worker. Discovered via worker container logs. Fix: changed `filename` → `title` in the INSERT column list. The parameter binding `:title` was already correctly mapped to `profile.full_name`. Suggested commit: `fix: correct resume INSERT column from filename to title`.
