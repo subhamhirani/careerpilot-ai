@@ -39,10 +39,11 @@ class TriggerScrapeRequest(BaseModel):
     linkedin_queries: Optional[list[str]] = None
     naukri_queries: Optional[list[str]] = None
     location: Optional[str] = None  # None = use user's preferred_location from profile
+    selected_locations: Optional[list[str]] = None  # List of locations to prioritize for scraping
 
     class Config:
-        # Allow empty body
-        extra = "forbid"
+        # Allow empty body plus extra fields (e.g., selected_locations)
+        extra = "allow"
 
 
 class ScrapeStatusResponse(BaseModel):
@@ -93,6 +94,8 @@ async def trigger_scrape(
             kwargs["naukri_queries"] = request.naukri_queries
         if request.location:
             kwargs["location"] = request.location
+        if request.selected_locations:
+            kwargs["selected_locations"] = request.selected_locations
 
     task = scrape_and_store_jobs.delay(**kwargs)
     return {"task_id": task.id, "status": "started"}

@@ -124,7 +124,12 @@ def scrape_and_store_jobs(
     linkedin_queries: list[str] | None = None,
     naukri_queries: list[str] | None = None,
     location: str | None = None,
+    selected_locations: list[str] | None = None,
 ) -> dict:
+    """Scrape jobs from all portals and store in PostgreSQL.
+
+    "selected_locations" overrides the generic location and defines priority locations to scrape.
+    """
     """Scrape jobs from all portals and store in PostgreSQL.
 
     Args:
@@ -173,6 +178,7 @@ def scrape_and_store_jobs(
             linkedin_queries=li_q,
             naukri_queries=na_q,
             location=resolved_location,
+            selected_locations=selected_locations,
         ))
 
         jobs = result["jobs"]
