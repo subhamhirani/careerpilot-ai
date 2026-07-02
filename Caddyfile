@@ -55,9 +55,7 @@
     }
 
     # Resume matcher endpoint
-    /api/resume/* {
-        reverse_proxy resume-agent:8002 {
-            uri strip_prefix /api/resume
-        }
+    handle /api/resume/* {
+        reverse_proxy resume-agent:8002
     }
 }
