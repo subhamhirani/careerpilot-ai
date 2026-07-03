@@ -22,6 +22,17 @@ from ..auth import get_current_user_id
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
+# Provide a root endpoint so ``/api/onboarding`` returns status instead of 404.
+@router.get("/", tags=["onboarding"])
+async def onboarding_root(user_id: str = Depends(get_current_user_id)):
+    """Alias for ``/status`` – returns onboarding progress at the base path.
+
+    This makes ``GET /api/onboarding`` a valid endpoint, improving UI
+    compatibility and eliminating the 404 seen in logs.
+    """
+    return await get_onboarding_status(user_id)
+
+
 
 def _get_db():
     dsn = os.getenv("DATABASE_URL", "")
