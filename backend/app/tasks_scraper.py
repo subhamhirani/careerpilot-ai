@@ -423,9 +423,10 @@ def run_relevance_scoring(self, user_id: str) -> dict:
             # ── Load unscored jobs (include company for multi-agent) ─
             jobs = session.execute(
                 text(
-                    "SELECT jp.id, jp.title, jp.company, jp.location, "
+                    "SELECT jp.id, jp.title, c.name as company, jp.location, "
                     "jp.description, jp.source, jp.source_url "
                     "FROM job_postings jp "
+                    "LEFT JOIN companies c ON jp.company_id = c.id "
                     "LEFT JOIN match_scores ms ON ms.job_posting_id = jp.id AND ms.user_id = :uid "
                     "WHERE ms.id IS NULL AND jp.status = 'new' "
                     "ORDER BY jp.created_at DESC "
