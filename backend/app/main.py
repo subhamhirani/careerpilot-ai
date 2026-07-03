@@ -23,6 +23,11 @@ from .routers import scraper, auth, resumes, jobs, matches, approvals, applicati
 from .routers.resumes import upload_resume
 from .telemetry import log_event
 
+# ── Provider auto‑registration ────────────────────────────
+# Importing this package auto‑registers all built‑in providers
+# into ProviderFactory so routers can use them via Dependency.
+from app import providers  # noqa: F401
+
 # ── Load .env before anything else ───────────────────────────
 load_dotenv()
 
