@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __app_name__, __version__
 from .auth import get_current_user_id
-from .routers import scraper, auth, resumes, jobs, matches, approvals, applications, dashboard, settings, process_status, notifications, user_profile, resume_parsing, cover_letters, onboarding
+from .routers import scraper, auth, resumes, jobs, matches, approvals, applications, dashboard, dashboard_live, settings, process_status, notifications, user_profile, resume_parsing, cover_letters, onboarding
 from .routers.resumes import upload_resume
 from .telemetry import log_event
 
@@ -70,7 +70,18 @@ async def log_requests(request: Request, call_next):
 
 # ── Routers (order matters: more specific routes first) ──────
 # onboarding before jobs so /onboarding/status doesn't match /jobs/{job_id}
+# Provide explicit ``/api/onboarding`` endpoint (no trailing slash) to avoid 404s.
+@app.get("/api/onboarding", tags=["onboarding"])
+async def onboarding_root_noslash(user_id: str = Depends(get_current_user_id)):
+    """Direct access to onboarding status without a trailing slash.
+
+    Calls the same logic as ``onboarding.get_onboarding_status``.
+    """
+    return await onboarding.get_onboarding_status(user_id)
+
+# Existing router includes still apply for ``/api/onboarding/`` and sub‑paths.
 app.include_router(onboarding.router, prefix="/api")
+# onboarding before jobs so /onboarding/status doesn't match /jobs/{job_id}
 app.include_router(scraper.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(resumes.router, prefix="/api")
@@ -80,6 +91,7 @@ app.include_router(approvals.router, prefix="/api")
 app.include_router(matches.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(dashboard_live.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(process_status.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")

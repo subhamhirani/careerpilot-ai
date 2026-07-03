@@ -22,6 +22,14 @@ from ..auth import get_current_user_id
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
+# Public health endpoint – no auth required.
+@router.get("/public", tags=["onboarding"])
+async def onboarding_public():
+    """Return a minimal health payload for unauthenticated checks.
+    Useful for UI components that only need to confirm the service is up.
+    """
+    return {"status": "ok", "message": "onboarding reachable"}
+
 # Provide a root endpoint so ``/api/onboarding`` returns status instead of 404.
 @router.get("/", tags=["onboarding"])
 async def onboarding_root(user_id: str = Depends(get_current_user_id)):
@@ -29,6 +37,16 @@ async def onboarding_root(user_id: str = Depends(get_current_user_id)):
 
     This makes ``GET /api/onboarding`` a valid endpoint, improving UI
     compatibility and eliminating the 404 seen in logs.
+    """
+    return await get_onboarding_status(user_id)
+
+# Also expose the endpoint without a trailing slash for direct ``/api/onboarding`` access.
+@router.get("", tags=["onboarding"])
+async def onboarding_root_no_slash(user_id: str = Depends(get_current_user_id)):
+    """Duplicate of ``onboarding_root`` without the trailing slash.
+
+    FastAPI's default redirect behaviour may be disabled in this deployment,
+    so we provide an explicit route matching ``/api/onboarding``.
     """
     return await get_onboarding_status(user_id)
 
