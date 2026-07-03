@@ -19,7 +19,7 @@ import {
   Bot,
   AlertCircle,
   ArrowLeft,
-} from 'lucide-react';
+} from 'phosphor-icons/react';
 
 const typeIcons: Record<string, React.ReactNode> = {
   job_match: <Briefcase className="h-4 w-4" />,

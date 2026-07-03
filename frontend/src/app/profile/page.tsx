@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { UserCircle, Save, Plus, X, Github, Linkedin, Globe } from 'lucide-react';
+import { UserCircle, Save, Plus, X, Github, Linkedin, Globe } from 'phosphor-icons/react';
 import { toast } from 'sonner';
 import type { UserProfile } from '@/types';
 

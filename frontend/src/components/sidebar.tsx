@@ -20,7 +20,7 @@ import {
   Activity,
   Bell,
   UserCircle,
-} from 'lucide-react';
+} from 'phosphor-icons/react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },

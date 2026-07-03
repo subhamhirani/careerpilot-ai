@@ -30,7 +30,7 @@ import {
   PieChart as PieChartIcon,
   Layers,
   Download,
-} from 'lucide-react';
+} from 'phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import type { AnalyticsData } from '@/types';
 

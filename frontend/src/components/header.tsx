@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Menu, Bell, Rocket, LogOut, User } from 'lucide-react';
+import { Menu, Bell, Rocket, LogOut, User } from 'phosphor-icons/react';
 import { useUIStore } from '@/lib/store';
 import { NotificationBell } from '@/components/notification-bell';
 

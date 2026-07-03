@@ -23,7 +23,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Briefcase,
-} from 'lucide-react';
+} from 'phosphor-icons/react';
 import Link from 'next/link';
 import type { PaginatedResponse, Job } from '@/types';
 

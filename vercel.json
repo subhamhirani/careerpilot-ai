@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "name": "careerpilot-frontend",
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "build": {
+    "cwd": "frontend"
+  },
+  "routes": [
+    {
+      "src": "/api/:path*",
+      "dest": "https://careerpilot-backend.onrender.com/api/:path*"
+    }
+  ]
+}

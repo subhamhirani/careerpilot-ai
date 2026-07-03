@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Moon, Sun, Monitor } from 'lucide-react';
+import { Moon, Sun, Monitor } from 'phosphor-icons/react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {

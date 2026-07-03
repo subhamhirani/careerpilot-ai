@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MatchScoreBadge } from '@/components/match-score-badge';
-import { MapPin, Building2, Calendar, ExternalLink, Send } from 'lucide-react';
+import { MapPin, Building2, Calendar, ExternalLink, Send } from 'phosphor-icons/react';
 import type { JobCardProps } from '@/types';
 
 const tierLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {

@@ -26,7 +26,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
-} from 'lucide-react';
+} from 'phosphor-icons/react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import type { DashboardStats, ActivityItem } from '@/types';

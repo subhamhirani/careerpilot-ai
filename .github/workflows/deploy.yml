@@ -29,16 +29,16 @@ jobs:
         cache-dependency-path: backend/requirements.txt
         python-version: '3.11'
     - name: Install deps
-      run: 'pip install --upgrade pip
-
+      run: |
+        pip install --upgrade pip
         pip install pytest pytest-asyncio httpx
-
-        pip install -r requirements.txt'
+        pip install -r requirements.txt
     - env:
         DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
         REDIS_URL: redis://localhost:***@v3
       name: Run tests
       run: pytest -x -q 2>&1 || echo "No tests found"
+
   deploy:
     if: github.event_name == 'push'
     needs: backend-test
@@ -49,20 +49,80 @@ jobs:
       with:
         host: ${{ secrets.HOST }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: "set -e\ncd /home/ubuntu/careerpilot\ngit pull origin main\ndocker\
-          \ compose build backend frontend\ndocker compose up -d backend\nsleep 10\n\
-          for i in $(seq 1 12); do\n  if curl -sf http://localhost:7899/health >/dev/null\
-          \ 2>&1; then\n    echo \"Backend healthy\"\n    break\n  fi\n  if [ \"$i\"\
-          \ -eq 12 ]; then\n    echo \"Backend health check failed\"\n    exit 1\n\
-          \  fi\n  echo \"Waiting... ($i/12)\"\n  sleep 5\ndone\ndocker compose up\
-          \ -d frontend\nsleep 5\nfor i in $(seq 1 6); do\n  if curl -sf http://localhost:3000\
-          \ >/dev/null 2>&1; then\n    echo \"Frontend healthy\"\n    break\n  fi\n\
-          \  if [ \"$i\" -eq 6 ]; then\n    echo \"Frontend health check failed\"\n\
-          \    exit 1\n  fi\n  echo \"Waiting... ($i/6)\"\n  sleep 5\ndone\ndocker\
-          \ compose up -d\necho \"Deployment complete!\"\ndocker compose ps"
+        script: |
+          set -e
+          cd /home/ubuntu/careerpilot
+          git pull origin main
+          docker compose build backend frontend
+          docker compose up -d backend
+          sleep 10
+          
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:7899/health >/dev/null 2>&1; then
+              echo "Backend healthy"
+              break
+            fi
+            if [ "$i" -eq 12 ]; then
+              echo "Backend health check failed"
+              exit 1
+            fi
+            echo "Waiting... ($i/12)"
+            sleep 5
+          done
+          
+          docker compose up -d frontend
+          sleep 5
+          
+          for i in $(seq 1 6); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+              echo "Frontend healthy"
+              break
+            fi
+            if [ "$i" -eq 6 ]; then
+              echo "Frontend health check failed"
+              exit 1
+            fi
+            echo "Waiting... ($i/6)"
+            sleep 5
+          done
+          
+          docker compose up -d
+          echo "Deployment complete!"
+          docker compose ps
         username: ${{ secrets.USERNAME }}
+
+  # ── Vercel Frontend Deployment ──────────────────────────────
+  vercel-deploy:
+    needs: backend-test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'yarn'
+        cache-dependency-path: frontend/yarn.lock
+    
+    - name: Install Vercel CLI
+      run: npm install -g vercel@latest
+    
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+    
+    - name: Deploy to Vercel
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      run: vercel --prod --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --confirm
+
 name: CI/CD - CareerPilot AI
-'on':
+on:
   pull_request:
     branches:
     - main

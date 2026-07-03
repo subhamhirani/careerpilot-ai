@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2, Settings, Search, Bell, Shield, Key, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Save, Plus, Trash2, Settings, Search, Bell, Shield, Key, Eye, EyeOff, RefreshCw } from 'phosphor-icons/react';
 import type { UserSettings, SearchQuery } from '@/types';
 
 interface ApiKeyEntry {

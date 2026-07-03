@@ -3,7 +3,7 @@
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { cn } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'phosphor-icons/react';
 
 const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
