@@ -3,7 +3,7 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Clock, FileText } from 'phosphor-icons/react';
+import { CheckCircle, XCircle, Clock, FileText } from '@phosphor-icons/react';
 import type { ApprovalCardProps } from '@/types';
 
 export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {

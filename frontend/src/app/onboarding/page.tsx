@@ -29,7 +29,7 @@ import {
   Briefcase,
   MapPin,
   X,
-} from 'phosphor-icons/react';
+} from '@phosphor-icons/react';
 
 // ── Types ──────────────────────────────────────────────────
 

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Briefcase, Loader2, Eye, EyeOff, Check, X } from 'phosphor-icons/react';
+import { Briefcase, Loader2, Eye, EyeOff, Check, X } from '@phosphor-icons/react';
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [

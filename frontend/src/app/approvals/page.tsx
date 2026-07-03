@@ -7,7 +7,7 @@ import { useApprovalStore } from '@/lib/store';
 import { ApprovalCard } from '@/components/approval-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { CheckSquare, CheckCircle, XCircle } from 'phosphor-icons/react';
+import { CheckSquare, CheckCircle, XCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import type { PaginatedResponse, Approval } from '@/types';
 

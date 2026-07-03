@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { FileText, Upload, Trash2, Star, Download, Plus } from 'phosphor-icons/react';
+import { FileText, Upload, Trash2, Star, Download, Plus } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import type { Resume } from '@/types';
 

@@ -22,7 +22,7 @@ import {
   Globe,
   ChevronRight,
   Sparkles,
-} from 'phosphor-icons/react';
+} from '@phosphor-icons/react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import type { Job, CoverLetter } from '@/types';

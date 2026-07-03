@@ -21,7 +21,7 @@ import {
   Briefcase,
   Zap,
   RotateCcw,
-} from 'phosphor-icons/react';
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 const statusConfig = {

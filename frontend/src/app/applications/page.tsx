@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MatchScoreBadge } from '@/components/match-score-badge';
-import { Send, Clock, CheckCircle, XCircle, AlertCircle, Building2, MapPin, FileText } from 'phosphor-icons/react';
+import { Send, Clock, CheckCircle, XCircle, AlertCircle, Building2, MapPin, FileText } from '@phosphor-icons/react';
 import type { PaginatedResponse, Application } from '@/types';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'warning' | 'outline' | 'success' | 'info'; icon: typeof Send }> = {

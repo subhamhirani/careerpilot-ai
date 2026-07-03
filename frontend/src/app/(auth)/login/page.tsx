@@ -9,6 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Briefcase, Loader2, Eye, EyeOff } from 'phosphor-icons/react
+<tool_call>
+<function=patch>
+<parameter=new_string>
 import { Briefcase, Loader2, Eye, EyeOff } from 'phosphor-icons/react';
 
 export default function LoginPage() {

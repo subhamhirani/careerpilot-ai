@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Minus } from 'phosphor-icons/react';
+import { TrendingUp, TrendingDown, Minus } from '@phosphor-icons/react';
 import type { StatsCardProps } from '@/types';
 
 export function StatsCard({ title, value, description, icon, trend }: StatsCardProps) {
