@@ -458,8 +458,11 @@ async def scrape_all(
     linkedin_queries: list[str] | None = None,
     naukri_queries: list[str] | None = None,
     location: str = "India",
+    selected_locations: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Scrape all sources and return combined, deduplicated results."""
+    """Scrape all sources and return combined, deduplicated results.
+    If selected_locations is provided, use the first location for scraping.
+"""
     start = time.monotonic()
 
     linkedin = LinkedInGuestScraper()
