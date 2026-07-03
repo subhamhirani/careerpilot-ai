@@ -463,6 +463,9 @@ async def scrape_all(
     """Scrape all sources and return combined, deduplicated results.
     If selected_locations is provided, use the first location for scraping.
 """
+    # Determine which location to use for scraping
+    location_to_use = selected_locations[0] if selected_locations else location
+
     start = time.monotonic()
 
     linkedin = LinkedInGuestScraper()
@@ -470,8 +473,8 @@ async def scrape_all(
 
     # Run both sources concurrently
     results = await asyncio.gather(
-        linkedin.search(queries=linkedin_queries, location=location),
-        naukri.search(queries=naukri_queries, location=location),
+        linkedin.search(queries=linkedin_queries, location=location_to_use),
+        naukri.search(queries=naukri_queries, location=location_to_use),
         return_exceptions=True,
     )
 
