@@ -255,6 +255,126 @@ async def update_resume(
     return await get_resume(resume_id, user_id, db)
 
 
+class TailorResumeRequest(dict):
+    """Placeholder for backwards compatibility in OpenAPI-free tests."""
+    pass
+
+
+def _resume_to_json(title: str, parsed_text: str | None) -> dict:
+    """Build a minimal resume JSON structure for the tailoring agent."""
+    text = parsed_text or ""
+    return {
+        "full_name": title or "Candidate",
+        "summary": text[:1200],
+        "experience": [],
+        "education": [],
+        "skills": [],
+        "raw_text": text,
+    }
+
+
+@router.post("/{resume_id}/tailor")
+async def tailor_resume_for_job(
+    resume_id: str,
+    request: dict,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
+    """Tailor an uploaded resume to a selected job and persist a resume version."""
+    job_id = request.get("job_id") or request.get("job_posting_id")
+    if not job_id:
+        raise HTTPException(status_code=422, detail="job_id or job_posting_id is required")
+
+    uid = uuid.UUID(user_id)
+    rid = _to_uuid(resume_id)
+    jid = _to_uuid(job_id)
+
+    resume = db.execute(
+        text("""
+            SELECT id, title, parsed_text, file_path
+            FROM resumes
+            WHERE id = :rid AND user_id = :uid
+        """),
+        {"rid": rid, "uid": uid},
+    ).mappings().fetchone()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    job = db.execute(
+        text("""
+            SELECT jp.id, jp.title, jp.description, jp.location, c.name as company_name
+            FROM job_postings jp
+            LEFT JOIN companies c ON jp.company_id = c.id
+            WHERE jp.id = :jid
+        """),
+        {"jid": jid},
+    ).mappings().fetchone()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    original_resume = _resume_to_json(resume.get("title") or "Resume", resume.get("parsed_text"))
+    job_description = "\n".join([
+        f"Title: {job.get('title') or ''}",
+        f"Company: {job.get('company_name') or ''}",
+        f"Location: {job.get('location') or ''}",
+        job.get("description") or "",
+    ])
+
+    output_dir = os.getenv("CAREERPILOT_STORAGE", "/app/storage/resume_versions")
+    os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        from app.agents.resume_tailoring import run_resume_tailoring_task
+        result = await run_resume_tailoring_task(
+            original_resume=original_resume,
+            job_description=job_description,
+            original_resume_id=str(rid),
+            job_posting_id=str(jid),
+            output_dir=output_dir,
+        )
+        content = __import__("json").dumps(result.get("tailored_json", {}))
+        file_path = result.get("pdf_path") or result.get("docx_path")
+        change_summary = f"Tailored for {job.get('title') or 'selected job'} at {job.get('company_name') or 'company'}"
+    except Exception as exc:
+        # Keep the workflow usable when the LLM provider/API key is unavailable.
+        content = __import__("json").dumps(original_resume)
+        file_path = resume.get("file_path")
+        change_summary = f"Fallback tailoring copy for job {jid}: {exc}"
+
+    latest_version = db.execute(
+        text("SELECT COALESCE(MAX(version_number), 0) FROM resume_versions WHERE resume_id = :rid"),
+        {"rid": rid},
+    ).scalar() or 0
+    version_id = uuid.uuid4()
+    db.execute(
+        text("""
+            INSERT INTO resume_versions
+                (id, resume_id, version_number, content, file_path, change_summary)
+            VALUES
+                (:id, :rid, :version_number, :content, :file_path, :change_summary)
+        """),
+        {
+            "id": version_id,
+            "rid": rid,
+            "version_number": int(latest_version) + 1,
+            "content": content,
+            "file_path": file_path,
+            "change_summary": change_summary,
+        },
+    )
+    db.commit()
+
+    return {
+        "id": str(version_id),
+        "resume_id": str(rid),
+        "job_posting_id": str(jid),
+        "version_number": int(latest_version) + 1,
+        "file_path": file_path,
+        "change_summary": change_summary,
+        "content": content,
+    }
+
+
 @router.get("/{resume_id}/download")
 async def download_resume(
     resume_id: str,

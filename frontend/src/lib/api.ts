@@ -98,6 +98,22 @@ export const api = {
   post: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
 
+  postForm: async <T>(endpoint: string, body: FormData) => {
+    const url = buildUrl(endpoint);
+    const headers = await getAuthHeaders();
+    delete (headers as Record<string, string>)['Content-Type'];
+    const res = await fetch(url, { method: 'POST', headers, body });
+    if (!res.ok) {
+      let errorMessage = `HTTP ${res.status}`;
+      try {
+        const errorBody = await res.json();
+        errorMessage = errorBody.detail || errorBody.error || errorBody.message || errorMessage;
+      } catch {}
+      throw new ApiError(errorMessage, res.status);
+    }
+    return await res.json() as T;
+  },
+
   put: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
 

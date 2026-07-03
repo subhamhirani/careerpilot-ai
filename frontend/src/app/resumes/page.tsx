@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useResumeStore } from '@/lib/store';
@@ -18,12 +19,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { FileText, Upload, Trash2, Star, Download, Plus } from '@phosphor-icons/react';
+import { FileText, Upload, Trash2, Star, Download, Plus, Sparkles } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import type { Resume } from '@/types';
 
 export default function ResumesPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const tailorJobId = searchParams.get('tailor');
   const { resumes, setResumes, loading, setLoading } = useResumeStore();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -50,15 +53,7 @@ export default function ResumesPage() {
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('name', uploadName || uploadFile.name);
-      const res = await fetch('/api/resumes/upload', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('careerpilot_token')}`,
-        },
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      return res.json();
+      return api.postForm('/resumes/upload', formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resumes'] });
@@ -80,6 +75,17 @@ export default function ResumesPage() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to update resume');
+    },
+  });
+
+  const tailorMutation = useMutation({
+    mutationFn: (resumeId: string) => api.post(`/resumes/${resumeId}/tailor`, { job_posting_id: tailorJobId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      toast.success('Tailored resume version created');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to tailor resume');
     },
   });
 
@@ -123,7 +129,7 @@ export default function ResumesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Resumes</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your uploaded resumes and CVs
+            {tailorJobId ? 'Select a resume to tailor for this job' : 'Manage your uploaded resumes and CVs'}
           </p>
         </div>
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -213,6 +219,17 @@ export default function ResumesPage() {
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t">
                   <div className="flex gap-1">
+                    {tailorJobId && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => tailorMutation.mutate(resume.id)}
+                        disabled={tailorMutation.isPending}
+                      >
+                        <Sparkles className="h-3.5 w-3.5 mr-1" />
+                        Tailor this resume
+                      </Button>
+                    )}
                     {!resume.is_active && (
                       <Button
                         variant="ghost"

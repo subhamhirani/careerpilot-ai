@@ -1,6 +1,12 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  webpack(config) {
+    config.resolve.alias['@phosphor-icons/react'] = path.resolve(__dirname, 'src/lib/phosphor-lucide-compat.ts');
+    return config;
+  },
   // For Vercel deployment, API routes proxy to production backend
   // For local Docker, they proxy to internal backend service
   async rewrites() {

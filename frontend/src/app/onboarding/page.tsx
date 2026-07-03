@@ -162,17 +162,7 @@ export default function OnboardingPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('name', file.name.replace(/\.(pdf|docx)$/i, ''));
-      const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/$/, '');
-      const token = localStorage.getItem('careerpilot_token') || '';
-      const res = await fetch(`${API_BASE}/api/resumes/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).detail as string || 'Upload failed');
-      }
+      await api.postForm('/resumes/upload', formData);
       toast.success('Resume uploaded successfully!');
       fetchStatus();
     } catch (err) {

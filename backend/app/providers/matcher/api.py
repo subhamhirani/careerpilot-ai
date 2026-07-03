@@ -59,9 +59,8 @@ class ApiMatcherProvider(MatcherProvider):
             data = resp.json()
 
         return MatchResult(
-            score=data.get("score", 0.0),
+            overall_score=data.get("score", 0.0),
             matched_skills=data.get("matched_skills", []),
             missing_skills=data.get("missing_skills", []),
-            recommendations=data.get("recommendations", []),
-            details=data,
+            raw_data=data,
         )

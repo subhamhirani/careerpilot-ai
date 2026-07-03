@@ -139,6 +139,8 @@ class OnboardingProfileRequest(BaseModel):
     education: Optional[list] = None
     preferred_location: Optional[str] = None
     preferred_roles: Optional[list] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
 
 
 # ── Routes ──────────────────────────────────────────────────
@@ -263,8 +265,25 @@ async def quick_setup_profile(
             if not data:
                 return {"message": "Nothing to update", "user_id": user_id}
 
+            columns = {
+                r[0] for r in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'user_profiles'"
+                )).fetchall()
+            }
+
+            # Map newer frontend fields to older schema names when needed.
+            if "headline" in data and "headline" not in columns and "current_role" in columns:
+                data["current_role"] = data.pop("headline")
+            if "preferred_roles" in data and "preferred_roles" not in columns and "target_roles" in columns:
+                data["target_roles"] = data.pop("preferred_roles")
+
+            # Drop unsupported optional fields instead of failing the whole onboarding flow.
+            data = {k: v for k, v in data.items() if k in columns}
+            if not data:
+                return {"message": "No supported profile fields to update", "user_id": user_id}
+
             # Serialize JSON fields
-            json_fields = ("skills", "experience", "education", "preferred_roles")
+            json_fields = ("skills", "experience", "education", "preferred_roles", "target_roles")
             for field in json_fields:
                 if field in data and data[field] is not None:
                     data[field] = json.dumps(data[field])

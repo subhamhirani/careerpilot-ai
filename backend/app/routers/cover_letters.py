@@ -12,7 +12,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
@@ -34,9 +34,16 @@ def _get_db():
 
 
 class GenerateRequest(BaseModel):
-    job_id: str
+    job_id: Optional[str] = None
+    job_posting_id: Optional[str] = None
     tone: str = "professional"  # professional, casual, enthusiastic
     short: bool = False
+
+    def resolved_job_id(self) -> str:
+        job_id = self.job_id or self.job_posting_id
+        if not job_id:
+            raise ValueError("job_id or job_posting_id is required")
+        return job_id
 
 
 def _to_uuid(value: str) -> uuid.UUID:
@@ -55,7 +62,10 @@ async def generate(
     session, engine = _get_db()
     try:
         uid = _to_uuid(user_id)
-        jid = _to_uuid(request.job_id)
+        try:
+            jid = _to_uuid(request.resolved_job_id())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
         # Load job with company name
         job = session.execute(
@@ -141,26 +151,41 @@ async def generate(
         else:
             letter = generate_cover_letter(profile, job_dict)
 
-        # Store in DB — columns: id, job_posting_id, user_id, content, tone, generated_at
+        # Store in DB, supporting both current and legacy cover_letters schemas.
         cl_id = str(uuid.uuid4())
+        word_count = len(letter.split())
         try:
-            session.execute(
-                text(
-                    """
-                    INSERT INTO cover_letters
-                        (id, user_id, job_posting_id, content, tone)
-                    VALUES
-                        (:id, :uid, :jid, :content, :tone)
-                    """
-                ),
-                {
-                    "id": cl_id,
-                    "uid": uid,
-                    "jid": jid,
-                    "content": letter,
-                    "tone": request.tone,
-                },
-            )
+            columns = {
+                r[0] for r in session.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'cover_letters'"
+                )).fetchall()
+            }
+            insert_cols = ["id", "user_id", "job_posting_id", "content", "tone"]
+            params = {
+                "id": cl_id,
+                "uid": uid,
+                "jid": jid,
+                "content": letter,
+                "tone": request.tone,
+                "title": f"Cover Letter - {job_dict['title']}",
+                "word_count": word_count,
+            }
+            if "title" in columns:
+                insert_cols.append("title")
+            if "word_count" in columns:
+                insert_cols.append("word_count")
+            col_sql = ", ".join(insert_cols)
+            value_map = {
+                "id": ":id",
+                "user_id": ":uid",
+                "job_posting_id": ":jid",
+                "content": ":content",
+                "tone": ":tone",
+                "title": ":title",
+                "word_count": ":word_count",
+            }
+            val_sql = ", ".join(value_map[c] for c in insert_cols)
+            session.execute(text(f"INSERT INTO cover_letters ({col_sql}) VALUES ({val_sql})"), params)
             session.commit()
         except Exception as db_err:
             session.rollback()
@@ -179,7 +204,9 @@ async def generate(
 
         return {
             "cover_letter": letter,
-            "word_count": len(letter.split()),
+            "content": letter,
+            "title": f"Cover Letter - {job_dict['title']}",
+            "word_count": word_count,
             "job_title": job_dict["title"],
             "company": job_dict["company"],
             "tone": request.tone,
@@ -207,7 +234,11 @@ async def list_cover_letters(
             query += " AND job_posting_id = :jid"
             params["jid"] = _to_uuid(job_id)
 
-        query += " ORDER BY created_at DESC LIMIT :limit"
+        order_col = "created_at"
+        columns = {r[0] for r in session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'cover_letters'")).fetchall()}
+        if "created_at" not in columns and "generated_at" in columns:
+            order_col = "generated_at"
+        query += f" ORDER BY {order_col} DESC LIMIT :limit"
         params["limit"] = limit
 
         rows = session.execute(text(query), params).mappings().all()
@@ -219,7 +250,9 @@ async def list_cover_letters(
                 "job_posting_id": str(row["job_posting_id"]) if row.get("job_posting_id") else None,
                 "content": row.get("content", ""),
                 "tone": row.get("tone", "formal"),
-                "generated_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                "title": row.get("title") or "Cover Letter",
+                "word_count": row.get("word_count") or len((row.get("content") or "").split()),
+                "created_at": (row.get("created_at") or row.get("generated_at")).isoformat() if (row.get("created_at") or row.get("generated_at")) else None,
             })
 
         return {"cover_letters": results, "total": len(results)}
@@ -249,7 +282,9 @@ async def get_cover_letter(
             "job_posting_id": str(row["job_posting_id"]) if row.get("job_posting_id") else None,
             "content": row.get("content", ""),
             "tone": row.get("tone", "formal"),
-            "generated_at": row["created_at"].isoformat() if row.get("created_at") else None,
+            "title": row.get("title") or "Cover Letter",
+            "word_count": row.get("word_count") or len((row.get("content") or "").split()),
+            "created_at": (row.get("created_at") or row.get("generated_at")).isoformat() if (row.get("created_at") or row.get("generated_at")) else None,
         }
     finally:
         session.close()

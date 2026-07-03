@@ -8,7 +8,7 @@ import os
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
@@ -68,9 +68,10 @@ async def list_jobs(
         conditions.append("jp.location ILIKE :location")
         params["location"] = f"%{location}%"
     if search:
-        conditions.append("(jp.title ILIKE :search OR c.name ILIKE :search2)")
+        conditions.append("(jp.title ILIKE :search OR c.name ILIKE :search2 OR COALESCE(jp.description, '') ILIKE :search3)")
         params["search"] = f"%{search}%"
         params["search2"] = f"%{search}%"
+        params["search3"] = f"%{search}%"
     if tier:
         conditions.append("ms.grade = :tier")
         params["tier"] = tier
@@ -109,9 +110,10 @@ async def list_jobs(
 
     jobs_sql = f"""
         SELECT jp.id, jp.title, jp.location, jp.source_url, jp.source_platform,
-               jp.posted_at, c.name as company_name,
-               COALESCE(ms.overall_score, 0) as match_score,
-               ms.grade as match_tier
+               jp.posted_at, jp.created_at, jp.updated_at, jp.description,
+               jp.salary_min, jp.salary_max, jp.currency, uj.status as user_status,
+               c.name as company_name, COALESCE(ms.overall_score, 0) as match_score,
+               ms.grade as match_tier, ms.details
         FROM job_postings jp
         INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
         LEFT JOIN companies c ON jp.company_id = c.id
@@ -130,10 +132,19 @@ async def list_jobs(
             "location": row[2],
             "url": row[3],
             "source": row[4],
-            "discovered_at": row[5].isoformat() if row[5] else None,
-            "company": row[6] or "Unknown",
-            "match_score": row[7] or 0,
-            "match_tier": row[8] or None,
+            "posted_at": row[5].isoformat() if row[5] else None,
+            "created_at": row[6].isoformat() if row[6] else None,
+            "updated_at": row[7].isoformat() if row[7] else None,
+            "description": row[8] or "",
+            "salary_min": float(row[9]) if row[9] is not None else None,
+            "salary_max": float(row[10]) if row[10] is not None else None,
+            "salary_currency": row[11] or "USD",
+            "status": row[12] or "new",
+            "company": row[13] or "Unknown",
+            "match_score": int(row[14] or 0),
+            "tier": row[15] or "tier_c",
+            "match_tier": row[15] or None,
+            "match_breakdown": (row[16] or {}).get("breakdown") if isinstance(row[16], dict) else None,
         })
 
     return {"data": jobs, "total": total, "page": (actual_offset // actual_limit) + 1, "page_size": actual_limit}
@@ -170,13 +181,14 @@ async def scrape_status(
 # ---------------------------------------------------------------------------
 # Job detail endpoints – must appear after static routes like /scrape-status
 # ---------------------------------------------------------------------------
+@router.get("/{job_id}")
 async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Get a specific job posting with match details (only if mapped to this user)."""
     row = db.execute(
         text("""
             SELECT jp.id, jp.title, jp.description, jp.location, jp.source_url, jp.source_platform,
-                   jp.salary_min, jp.salary_max, jp.posted_at,
-                   c.name as company_name
+                   jp.salary_min, jp.salary_max, jp.currency, jp.posted_at, jp.created_at, jp.updated_at,
+                   c.name as company_name, uj.status
             FROM job_postings jp
             INNER JOIN user_jobs uj ON uj.job_posting_id = jp.id AND uj.user_id = :uid
             LEFT JOIN companies c ON jp.company_id = c.id
@@ -186,7 +198,6 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
     ).fetchone()
 
     if not row:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Job not found")
 
     match = db.execute(
@@ -208,8 +219,12 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
         "source": row[5],
         "salary_min": row[6],
         "salary_max": row[7],
-        "posted_at": row[8].isoformat() if row[8] else None,
-        "company": row[9] or "Unknown",
+        "salary_currency": row[8] or "USD",
+        "posted_at": row[9].isoformat() if row[9] else None,
+        "created_at": row[10].isoformat() if row[10] else None,
+        "updated_at": row[11].isoformat() if row[11] else None,
+        "company": row[12] or "Unknown",
+        "status": row[13] or "new",
     }
 
     if match:
@@ -219,6 +234,20 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: 
             "tier": match[2],
             "details": match[3],
         }
+        result["match_score"] = int(match[1] or 0)
+        result["tier"] = match[2] or "tier_c"
+        details = match[3] if isinstance(match[3], dict) else {}
+        result["match_breakdown"] = details.get("breakdown") or {
+            "skills": int(details.get("skills_score", 0) or 0),
+            "experience": int(details.get("experience_score", 0) or 0),
+            "education": int(details.get("education_score", 0) or 0),
+            "location": int(details.get("location_score", 0) or 0),
+            "salary": int(details.get("salary_score", 0) or 0),
+            "overall": int(match[1] or 0),
+        }
+    else:
+        result["match_score"] = 0
+        result["tier"] = "tier_c"
 
     return result
 
@@ -252,7 +281,6 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
         {"jid": job_id},
     ).fetchone()
     if not job:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Job not found")
     # Check not already applied
     existing = db.execute(
@@ -265,7 +293,7 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
     db.execute(
         text("""
             INSERT INTO applications (id, user_id, job_posting_id, status)
-            VALUES (:aid, :uid, :jid, 'SUBMITTED')
+            VALUES (:aid, :uid, :jid, 'submitted')
         """),
         {"aid": app_id, "uid": uuid.UUID(user_id), "jid": job_id},
     )

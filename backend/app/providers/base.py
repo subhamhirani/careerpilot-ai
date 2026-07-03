@@ -15,6 +15,19 @@ from typing import Any, Optional
 # ---------------------------------------------------------------------------
 
 @dataclass
+class MatchResult:
+    """Result from a resume-to-job matching operation."""
+    overall_score: float
+    grade: str = ""
+    matched_skills: list[str] = field(default_factory=list)
+    missing_skills: list[str] = field(default_factory=list)
+    keyword_score: float = 0.0
+    skill_score: float = 0.0
+    location_match: float = 0.0
+    raw_data: dict[str, Any] = field(default_factory=dict)
+    provider: str = ""
+
+@dataclass
 class JobPosting:
     """Normalised job posting from any source."""
     source: str
