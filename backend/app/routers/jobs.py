@@ -293,7 +293,7 @@ async def apply_to_job(job_id: str, user_id: str = Depends(get_current_user_id),
     db.execute(
         text("""
             INSERT INTO applications (id, user_id, job_posting_id, status)
-            VALUES (:aid, :uid, :jid, 'submitted')
+            VALUES (:aid, :uid, :jid, 'SUBMITTED')
         """),
         {"aid": app_id, "uid": uuid.UUID(user_id), "jid": job_id},
     )
