@@ -1,11 +1,12 @@
 'use client';
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { MatchScoreBadge } from '@/components/match-score-badge';
-import { MapPin, Building2, Calendar, ExternalLink, Send } from '@phosphor-icons/react';
-import type { JobCardProps } from '@/types';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { MatchScoreBadge } from '@/components/match-score-badge'
+import { MapPin, Building2, Calendar, ExternalLink, Send, Sparkles } from '@phosphor-icons/react'
+import Link from 'next/link'
+import type { JobCardProps } from '@/types'
 
 const tierLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
   tier_a: { label: 'Tier A', variant: 'default' },
@@ -74,10 +75,18 @@ export function JobCard({ job, onApply, onView }: JobCardProps) {
             View
           </Button>
           {job.status === 'new' && (
-            <Button variant="default" size="sm" onClick={() => onApply?.(job.id)}>
-              <Send className="h-3.5 w-3.5 mr-1" />
-              Apply
-            </Button>
+            <>
+              <Button variant="default" size="sm" onClick={() => onApply?.(job.id)}>
+                <Send className="h-3.5 w-3.5 mr-1" />
+                Apply
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/resumes?tailor=${job.id}`}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  Tailor
+                </Link>
+              </Button>
+            </>
           )}
         </div>
       </CardFooter>

@@ -164,8 +164,8 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
         if not existing_profile:
             session.execute(
                 text(
-                    "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, created_at, updated_at) "
-                    "VALUES (:id, :uid, :name, :phone, :summary, NOW(), NOW())"
+                    "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, skills, experience, education, preferred_roles, preferred_location, created_at, updated_at) "
+                    "VALUES (:id, :uid, :name, :phone, :summary, :skills, :exp, :edu, :targets, :locs, NOW(), NOW())"
                 ),
                 {
                     "id": str(uuid.uuid4()),
@@ -173,6 +173,11 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                     "name": profile.full_name or "",
                     "phone": profile.phone or "",
                     "summary": profile.summary or "",
+                    "skills": skills_val,
+                    "exp": exp_val,
+                    "edu": edu_val,
+                    "targets": targets_val,
+                    "locs": locs_val,
                 },
             )
         else:

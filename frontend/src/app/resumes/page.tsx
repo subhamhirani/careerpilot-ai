@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { FileText, Upload, Trash2, Star, Download, Plus, Sparkles } from '@phosphor-icons/react';
+import { FileText, Upload, Trash2, Star, Download, Plus, Sparkles, MapPin } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import type { Resume } from '@/types';
 
@@ -31,12 +31,23 @@ export default function ResumesPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState('');
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationValue, setLocationValue] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['resumes'],
     queryFn: async () => {
       const res = await api.get<{resumes: Resume[]; total: number}>('/resumes');
       return res.resumes || [];
+    },
+  });
+
+  // Fetch current preferred location (used to gate the post-upload prompt)
+  const { data: locationData } = useQuery({
+    queryKey: ['user-location'],
+    queryFn: async () => {
+      const res = await api.get<{preferred_location: string}>('/user-profile/location');
+      return res.preferred_location || '';
     },
   });
 
@@ -55,15 +66,40 @@ export default function ResumesPage() {
       formData.append('name', uploadName || uploadFile.name);
       return api.postForm('/resumes/upload', formData);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['resumes'] });
       setUploadOpen(false);
       setUploadFile(null);
       setUploadName('');
       toast.success('Resume uploaded successfully');
+      // Surface location-selection prompt if preferred_location is empty
+      try {
+        const loc = await queryClient.fetchQuery({
+          queryKey: ['user-location'],
+          queryFn: async () => {
+            const res = await api.get<{preferred_location: string}>('/user-profile/location');
+            return res.preferred_location || '';
+          },
+        });
+        if (!loc) setLocationOpen(true);
+      } catch {
+        // ignore — non-blocking
+      }
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to upload resume');
+    },
+  });
+
+  const locationMutation = useMutation({
+    mutationFn: async (loc: string) => api.put('/user-profile/location', { preferred_location: loc }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-location'] });
+      setLocationOpen(false);
+      toast.success('Preferred location saved');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save location');
     },
   });
 
@@ -178,6 +214,48 @@ export default function ResumesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Post-upload location prompt — shown when preferred_location is empty after an upload */}
+      <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Set your preferred location
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Great — your resume is uploaded! Tell us where you'd like to work so CareerPilot can match you with the right jobs. You can change this any time from your profile.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="preferred-location">Preferred Location</Label>
+              <Input
+                id="preferred-location"
+                placeholder="Remote, Bangalore, Mumbai"
+                value={locationValue}
+                onChange={(e) => setLocationValue(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="ghost"
+                onClick={() => setLocationOpen(false)}
+                disabled={locationMutation.isPending}
+              >
+                Skip for now
+              </Button>
+              <Button
+                disabled={!locationValue.trim() || locationMutation.isPending}
+                onClick={() => locationMutation.mutate(locationValue.trim())}
+              >
+                {locationMutation.isPending ? 'Saving...' : 'Save location'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {resumes.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

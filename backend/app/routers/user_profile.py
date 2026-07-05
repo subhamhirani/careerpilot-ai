@@ -55,6 +55,10 @@ class UpdateProfileRequest(BaseModel):
     total_years_experience: Optional[float] = None
 
 
+class UpdateLocationRequest(BaseModel):
+    preferred_location: str
+
+
 @router.get("/")
 async def get_profile(user_id: str = Depends(get_current_user_id)):
     """Get the current user's profile."""
@@ -193,6 +197,63 @@ async def update_profile(
         session.rollback()
         logger.error("Failed to update profile: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update profile")
+    finally:
+        session.close()
+        engine.dispose()
+
+
+# ── Location-specific endpoints ───────────────────────────────────────────
+
+@router.get("/location")
+async def get_location(user_id: str = Depends(get_current_user_id)):
+    """Return the user's current preferred location."""
+    session, engine = _get_db()
+    try:
+        uid = _to_uuid(user_id)
+        row = session.execute(
+            text("SELECT preferred_location FROM user_profiles WHERE user_id = :uid"),
+            {"uid": uid},
+        ).mappings().fetchone()
+        return {"preferred_location": row.get("preferred_location", "") or ""} if row else {"preferred_location": ""}
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@router.put("/location")
+async def update_location(
+    update: UpdateLocationRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update the user's preferred location without touching other profile fields."""
+    session, engine = _get_db()
+    try:
+        uid = _to_uuid(user_id)
+        existing = session.execute(
+            text("SELECT id FROM user_profiles WHERE user_id = :uid"),
+            {"uid": uid},
+        ).fetchone()
+
+        if existing:
+            session.execute(
+                text("UPDATE user_profiles SET preferred_location = :loc, updated_at = NOW() WHERE user_id = :uid"),
+                {"loc": update.preferred_location, "uid": uid},
+            )
+        else:
+            new_id = str(uuid.uuid4())
+            session.execute(
+                text(
+                    "INSERT INTO user_profiles (id, user_id, preferred_location, created_at, updated_at) "
+                    "VALUES (:id, :uid, :loc, NOW(), NOW())"
+                ),
+                {"id": new_id, "uid": uid, "loc": update.preferred_location},
+            )
+        session.commit()
+        return {"preferred_location": update.preferred_location}
+    except Exception as e:
+        session.rollback()
+        logger.error("Failed to update location: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to update location")
     finally:
         session.close()
         engine.dispose()
