@@ -1,131 +1,124 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { setAuthToken, clearAuthToken } from '@/lib/api';
-
-interface User {
-  user_id: string;
-  email: string;
-}
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface AuthContextType {
-  user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
+  user: any | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<string | null>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   logout: () => void;
-  forgotPassword: (email: string) => Promise<{message: string; token: string | null}>;
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
-
-const API = typeof window !== 'undefined' ? window.location.origin : '';
-
-async function apiPost(path: string, body: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    let message = `HTTP ${res.status}`;
-    if (typeof err.detail === 'string') {
-      message = err.detail;
-    } else if (Array.isArray(err.detail)) {
-      message = err.detail[0]?.msg || `Validation error (HTTP ${res.status})`;
-    } else if (err.message) {
-      message = err.message;
-    }
-    throw new Error(message);
-  }
-  return res.json();
-}
+const AuthContext = createContext<AuthContextType>({
+  isAuthenticated: false,
+  user: null,
+  login: async () => {},
+  register: async () => {},
+  forgotPassword: async () => null,
+  resetPassword: async () => {},
+  logout: () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
 
-  // Restore token from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('careerpilot_token');
-    if (stored) {
-      setToken(stored);
-      // Try to decode user info from JWT payload
-      try {
-        const payload = JSON.parse(atob(stored.split('.')[1]));
-        if (payload.sub) {
-          setUser({ user_id: payload.sub, email: payload.email || '' });
-        }
-      } catch {
-        // Token exists but can't decode user — still set it
-      }
-    }
-    setInitialized(true);
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {
-    const data = await apiPost('/api/auth/login', { email, password });
-    const accessToken = data.access_token as string;
-    localStorage.setItem('careerpilot_token', accessToken);
-    setToken(accessToken);
-    // Decode user from token
-    try {
-      const payload = JSON.parse(atob(accessToken.split('.')[1]));
-      setUser({ user_id: payload.sub as string, email: payload.email as string || email });
-    } catch {
-      setUser({ user_id: '', email });
-    }
-    // Redirect new users to onboarding
-    if (data.is_new_user) {
-      if (typeof window !== 'undefined') {
-        window.location.href = '/onboarding';
-      }
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      setIsAuthenticated(true);
     }
   }, []);
 
-  const register = useCallback(async (email: string, password: string, fullName?: string) => {
-    const data = await apiPost('/api/auth/register', { email, password, full_name: fullName });
-    const accessToken = data.access_token as string;
-    localStorage.setItem('careerpilot_token', accessToken);
-    setToken(accessToken);
-    setUser({
-      user_id: data.user_id as string,
-      email: data.email as string || email,
+  const login = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
     });
-    // New users go to onboarding
-    if (typeof window !== 'undefined') {
-      window.location.href = '/onboarding';
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(error || 'Login failed');
     }
-  }, []);
 
-  const forgotPassword = useCallback(async (email: string) => {
-    return apiPost('/api/auth/forgot-password', { email }) as Promise<{message: string; token: string | null}>;
-  }, []);
+    const data = await res.json();
+    localStorage.setItem('access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+    setIsAuthenticated(true);
+    setUser(data.user || null);
+  };
 
-  const resetPassword = useCallback(async (token: string, newPassword: string) => {
-    await apiPost('/api/auth/reset-password', { token, new_password: newPassword });
-  }, []);
+  const register = async (fullName: string, email: string, password: string) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName, email, password }),
+    });
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('careerpilot_token');
-    clearAuthToken();
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(error || 'Registration failed');
+    }
+
+    const data = await res.json();
+    localStorage.setItem('access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+    setIsAuthenticated(true);
+    setUser(data.user || null);
+  };
+
+  const forgotPassword = async (email: string): Promise<string | null> => {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(error || 'Failed to send reset email');
+    }
+
+    const data = await res.json();
+    // In development mode the backend returns the raw token for convenience
+    return data.token || null;
+  };
+
+  const resetPassword = async (token: string, password: string) => {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: password }),
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(error || 'Failed to reset password');
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setIsAuthenticated(false);
     setUser(null);
-    setToken(null);
-  }, []);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, register, forgotPassword, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth(): AuthContextType {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+export function useAuth() {
+  return useContext(AuthContext);
 }

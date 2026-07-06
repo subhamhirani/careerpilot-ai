@@ -1,0 +1,15 @@
+.intro-container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.button-wrapper button {
+  margin: 10px;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.button-wrapper button:hover {
+  transform: scale(1.05);
+}

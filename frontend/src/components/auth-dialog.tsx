@@ -77,7 +77,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     }
     setLoading(true);
     try {
-      await register(regEmail, regPassword, regFullName || undefined);
+      await register(regFullName || '', regEmail, regPassword);
       toast.success('Account created successfully');
       onOpenChange(false);
     } catch (err) {
@@ -95,13 +95,13 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     }
     setLoading(true);
     try {
-      const result = await forgotPassword(forgotEmail);
-      if (result.token) {
-        setResetToken(result.token);
+      const token = await forgotPassword(forgotEmail);
+      if (token) {
+        setResetToken(token);
         toast.success('Reset token generated! Set your new password below.');
         setView('reset');
       } else {
-        toast.success('If an account exists, a reset token has been generated. Check your email.');
+        toast.success('If an account exists, a reset email has been sent. Check your email.');
         setForgotEmail('');
         setView('login');
       }

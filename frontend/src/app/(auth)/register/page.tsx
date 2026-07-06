@@ -76,7 +76,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      await register(email, password, fullName);
+      await register(fullName, email, password);
       toast.success("Account created!");
       router.push("/onboarding");
     } catch (err) {

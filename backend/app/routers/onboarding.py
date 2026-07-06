@@ -142,12 +142,16 @@ def _count_user_applications(user_id: str) -> int:
 
 
 def _user_has_api_keys(user_id: str) -> bool:
+    """Return True if at least one active system API key is configured.
+
+    Note: api_keys are global (system-wide) in the live schema, so the
+    caller's user_id is informational only — keys are not per-user.
+    """
     engine = _get_db()
     try:
         with engine.connect() as conn:
             result = conn.execute(
-                text("SELECT 1 FROM api_settings WHERE user_id = :uid"),
-                {"uid": _to_uuid(user_id)},
+                text("SELECT 1 FROM api_settings WHERE is_active = TRUE LIMIT 1"),
             ).fetchone()
             return result is not None
     except Exception:

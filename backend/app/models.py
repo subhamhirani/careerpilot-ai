@@ -26,6 +26,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -163,9 +164,6 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     telegram_settings: Mapped[Optional["TelegramSettings"]] = relationship(
-        back_populates="user", uselist=False, cascade="all, delete-orphan"
-    )
-    api_settings: Mapped[Optional["ApiSettings"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     search_preferences: Mapped[List["SearchPreference"]] = relationship(
@@ -601,24 +599,27 @@ class AuditLog(Base):
 
 
 class ApiSettings(Base):
+    """
+    Global system API keys (one row per provider+model). Keys are NOT
+    per-user — they belong to the deployment itself, so the model has
+    no user_id FK. Schema is locked to the live DB:
+
+        id (int PK), provider, model_name, api_key, is_active, created_at, updated_at
+    """
+
     __tablename__ = "api_settings"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=_uuid
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
-    )
-    provider_name: Mapped[str] = mapped_column(String(64), nullable=False)
-    api_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=_utcnow, nullable=False
     )
-
-    user: Mapped["User"] = relationship(back_populates="api_settings")
 
 
 class TelegramSettings(Base):

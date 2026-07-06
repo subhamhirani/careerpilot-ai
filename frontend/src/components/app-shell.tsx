@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Header } from '@/components/header';
 import { Sidebar } from '@/components/sidebar';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/intro'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();

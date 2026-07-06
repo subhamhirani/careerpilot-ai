@@ -211,7 +211,7 @@ export default function OnboardingPage() {
     } catch {
       // ignore
     }
-    router.push('/dashboard');
+    router.push('/jobs');
   };
 
   // ── Render ───────────────────────────────────────────────

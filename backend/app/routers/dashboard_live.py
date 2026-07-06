@@ -16,19 +16,7 @@ def _get_db():
     sync_dsn = dsn.replace("+asyncpg", "+psycopg2")
     return create_engine(sync_dsn)
 
-@router.get("/stats", tags=["dashboard"])
-async def dashboard_stats():
-    """Alias for ``/live`` – kept for backward compatibility with the frontend.
-    Returns identical payload as ``/live``.
-    """
-    return await live_dashboard()
-
-@router.get("/live", tags=["dashboard"])
-async def live_alias():
-    """Backward‑compatible alias for ``/live`` – returns the same payload as ``/stats``.
-    """
-    return await live_dashboard()
-
+async def live_dashboard():
     """Return a small JSON payload with live system metrics.
     No authentication – suitable for status pages or health monitors.
     """
@@ -56,3 +44,9 @@ async def live_alias():
         "scraper_running": scraper_running,
         "last_scrape": last_scrape,
     }
+
+@router.get("/live", tags=["dashboard"])
+async def live_alias():
+    """Backward‑compatible alias for ``/live`` – returns the same payload as ``/stats``.
+    """
+    return await live_dashboard()

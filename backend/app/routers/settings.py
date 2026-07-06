@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user_id
@@ -29,6 +29,7 @@ def _get_db():
 class ApiKeyUpdate(BaseModel):
     provider: str
     key: str
+    model_name: Optional[str] = "default"
 
 
 @router.get("")
@@ -61,55 +62,81 @@ async def update_settings(
     return current
 
 
+def _mask_key(k: str) -> str:
+    if not k:
+        return "****"
+    if len(k) <= 4:
+        return "****"
+    return "*" * (len(k) - 4) + k[-4:]
+
+
 @router.get("/api")
 async def get_api_keys(user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
-    """Return the current user's configured API keys (masked)."""
+    """Return the active system API keys (masked)."""
     from ..models import ApiSettings
-    stmt = select(ApiSettings).where(ApiSettings.user_id == uuid.UUID(user_id))
-    results = db.execute(stmt).scalars().all()
-    keys = []
-    for r in results:
-        # Mask the key - show only last 4 chars
-        masked = "*" * (len(r.api_key) - 4) + r.api_key[-4:] if len(r.api_key) > 4 else "****"
-        keys.append({"provider": r.provider_name, "key": masked})
+
+    stmt = select(ApiSettings).where(ApiSettings.is_active.is_(True))
+    rows = db.execute(stmt).scalars().all()
+    keys = [
+        {
+            "provider": r.provider,
+            "model_name": r.model_name,
+            "key": _mask_key(r.api_key),
+        }
+        for r in rows
+    ]
     return {"api_keys": keys}
 
 
 @router.put("/api")
-async def update_api_key(data: ApiKeyUpdate, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
-    """Store or update an API key for a given provider."""
+async def update_api_key(
+    data: ApiKeyUpdate,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
+    """Store or update a system API key for a given provider (+ optional model)."""
     from ..models import ApiSettings
-    # Check if key already exists for this provider
+
+    model_name = data.model_name or "default"
     stmt = select(ApiSettings).where(
-        ApiSettings.user_id == uuid.UUID(user_id),
-        ApiSettings.provider_name == data.provider,
+        ApiSettings.provider == data.provider,
+        ApiSettings.model_name == model_name,
     )
     existing = db.execute(stmt).scalar_one_or_none()
     if existing:
         existing.api_key = data.key
+        existing.is_active = True
     else:
         obj = ApiSettings(
-            id=uuid.uuid4(),
-            user_id=uuid.UUID(user_id),
-            provider_name=data.provider,
+            provider=data.provider,
+            model_name=model_name,
             api_key=data.key,
+            is_active=True,
         )
         db.add(obj)
     db.commit()
-    return {"message": f"API key for {data.provider} updated"}
+    return {"message": f"API key for {data.provider}/{model_name} updated"}
 
 
 @router.delete("/api/{provider}")
-async def delete_api_key(provider: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
-    """Delete an API key for a given provider."""
+async def delete_api_key(
+    provider: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+    model_name: Optional[str] = None,
+):
+    """Deactivate the active system API key for a given provider (soft delete)."""
     from ..models import ApiSettings
+
     stmt = select(ApiSettings).where(
-        ApiSettings.user_id == uuid.UUID(user_id),
-        ApiSettings.provider_name == provider,
+        ApiSettings.provider == provider,
+        ApiSettings.is_active.is_(True),
     )
+    if model_name:
+        stmt = stmt.where(ApiSettings.model_name == model_name)
     existing = db.execute(stmt).scalar_one_or_none()
     if not existing:
-        raise HTTPException(status_code=404, detail=f"No API key found for {provider}")
-    db.delete(existing)
+        raise HTTPException(status_code=404, detail=f"No active API key found for {provider}")
+    existing.is_active = False
     db.commit()
-    return {"message": f"API key for {provider} deleted"}
+    return {"message": f"API key for {provider} deactivated"}

@@ -38,7 +38,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   };
 
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('careerpilot_token') || sessionStorage.getItem('careerpilot_token');
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
