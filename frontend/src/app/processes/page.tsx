@@ -58,9 +58,9 @@ function ProcessCard({ process, onRetry }: { process: ProcessStatus; onRetry?: (
               <div className="mt-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                   <span>Progress</span>
-                  <span>{process.progress_pct}%</span>
+                  <span>{Math.min(100, Math.max(0, process.progress_pct || 0))}%</span>
                 </div>
-                <Progress value={process.progress_pct} className="h-1.5" />
+                <Progress value={Math.min(100, Math.max(0, process.progress_pct || 0))} className="h-1.5" />
               </div>
             )}
             {process.error_message && (

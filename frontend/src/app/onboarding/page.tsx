@@ -228,9 +228,10 @@ export default function OnboardingPage() {
   }
 
   const steps = status?.steps || [];
-  const progress = status?.progress || { completed: 0, total: 7, percent: 0 };
+  const progress = status?.progress || { completed: 0, total: 6, percent: 0 };
   const currentStepMeta = STEP_META[activeStep];
   const CurrentIcon = currentStepMeta?.icon || Circle;
+  const clampedPercent = Math.min(100, Math.max(0, progress.percent || 0));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -246,9 +247,9 @@ export default function OnboardingPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 mt-4">
-          <Progress value={progress.percent} className="flex-1 h-2" />
+          <Progress value={clampedPercent} className="flex-1 h-2" />
           <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-            {progress.completed}/{progress.total} done
+            {progress.completed}/{progress.total} done ({clampedPercent}%)
           </span>
         </div>
       </div>

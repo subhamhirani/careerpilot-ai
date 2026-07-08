@@ -19,9 +19,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setIsClient(true);
   }, []);
 
-  const isPublicPath = PUBLIC_PATHS.some(
-    (p) => p === '/' ? pathname === '/' : (pathname === p || pathname.startsWith(p + '/'))
-  );
+  const isPublicPath = PUBLIC_PATHS.some((p) => {
+    if (p === '/') return pathname === '/' && !isAuthenticated;
+    return pathname === p || pathname.startsWith(p + '/');
+  });
 
   // Redirect unauthenticated users away from protected routes
   useEffect(() => {

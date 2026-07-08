@@ -263,16 +263,17 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
     ]
 
     completed = sum(1 for s in steps if s["status"] == "complete")
-    total_actionable = sum(1 for s in steps if s["status"] != "skippable")
+    total_steps = len(steps)
+    percent = min(100, max(0, round((completed / total_steps) * 100))) if total_steps > 0 else 100
 
     return {
         "steps": steps,
         "progress": {
             "completed": completed,
-            "total": total_actionable,
-            "percent": round(completed / total_actionable * 100) if total_actionable > 0 else 100,
+            "total": total_steps,
+            "percent": percent,
         },
-        "is_complete": completed >= total_actionable,
+        "is_complete": completed >= total_steps,
     }
 
 
