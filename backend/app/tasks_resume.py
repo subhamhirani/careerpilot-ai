@@ -154,12 +154,12 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
             {"uid": user_id},
         ).fetchone()
 
-        # Pass dicts directly — psycopg2 auto-converts Python dict → JSONB
-        skills_val = profile.skills if isinstance(profile.skills, list) else list(profile.skills)
-        exp_val = profile.work_experience if isinstance(profile.work_experience, list) else list(profile.work_experience)
-        edu_val = profile.education if isinstance(profile.education, list) else list(profile.education)
-        targets_val = profile.preferred_roles if isinstance(profile.preferred_roles, list) else list(profile.preferred_roles)
-        locs_val = profile.preferred_locations if isinstance(profile.preferred_locations, list) else list(profile.preferred_locations)
+        # Serialize JSONB columns using json.dumps for psycopg2 raw SQL execution
+        skills_val = json.dumps(profile.skills if isinstance(profile.skills, list) else list(profile.skills or []))
+        exp_val = json.dumps(profile.work_experience if isinstance(profile.work_experience, list) else list(profile.work_experience or []))
+        edu_val = json.dumps(profile.education if isinstance(profile.education, list) else list(profile.education or []))
+        targets_val = json.dumps(profile.preferred_roles if isinstance(profile.preferred_roles, list) else list(profile.preferred_roles or []))
+        locs_val = ", ".join(str(l) for l in profile.preferred_locations) if isinstance(profile.preferred_locations, list) else str(profile.preferred_locations or "")
 
         if not existing_profile:
             session.execute(
