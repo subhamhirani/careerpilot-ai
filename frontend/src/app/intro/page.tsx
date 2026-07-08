@@ -2,27 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
-  Sparkles,
   Briefcase,
-  Search,
-  Bot,
-  CheckCircle2,
+  Rocket,
   ArrowRight,
-  ShieldCheck,
-  Zap,
-  Globe,
-  FileText,
-  Layers,
-  TrendingUp,
   UserPlus,
   Lock,
+  CheckCircle,
+  Bot,
+  Sparkle,
   Play,
-  Star,
-  Award,
-  Cpu,
-  Check,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 const PERSONAS = [
   {
@@ -92,346 +84,318 @@ export default function IntroPage() {
   const [activeTab, setActiveTab] = useState<'match' | 'cover'>('match');
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white overflow-x-hidden">
-      {/* Background Ambient Glows */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 left-1/4 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl" />
-      </div>
-
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/80">
+    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary selection:text-primary-foreground">
+      {/* Cohesive Application Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <Briefcase className="h-5 w-5" />
             </div>
-            <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              CareerPilot AI
-            </span>
-            <span className="text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Pro Max 2.6
-            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg leading-none tracking-tight">CareerPilot AI</span>
+              <span className="text-[10px] text-muted-foreground font-medium">Autonomous Career Platform</span>
+            </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
-            <a href="#simulator" className="hover:text-white transition-colors">
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+            <a href="#simulator" className="hover:text-foreground transition-colors">
               Interactive Demo
             </a>
-            <a href="#scrapers" className="hover:text-white transition-colors">
-              9 Scraper Sources
+            <a href="#scrapers" className="hover:text-foreground transition-colors">
+              9 Scraper Portals
             </a>
-            <a href="#workflow" className="hover:text-white transition-colors">
-              How it Works
-            </a>
-            <a href="#features" className="hover:text-white transition-colors">
-              AI Intelligence
+            <a href="#workflow" className="hover:text-foreground transition-colors">
+              Workflow
             </a>
           </nav>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-900 transition-colors"
-            >
-              Sign In
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Lock className="h-4 w-4" />
+                <span>Sign In</span>
+              </Button>
             </Link>
-            <Link
-              href="/register"
-              className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all flex items-center gap-2"
-            >
-              <span>Get Started Free</span>
-              <ArrowRight className="w-4 h-4" />
+            <Link href="/register">
+              <Button size="sm" className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                <span>Get Started</span>
+              </Button>
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative z-10 pt-16 pb-20 px-6">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-8">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>Autonomous AI Career Intelligence Engine</span>
+      {/* Hero Section matching Internal Software SaaS styling */}
+      <main className="flex-1">
+        <section className="py-16 md:py-24 px-6 border-b bg-gradient-to-b from-background via-muted/30 to-background">
+          <div className="max-w-5xl mx-auto text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-card text-xs font-medium text-muted-foreground shadow-sm">
+              <Sparkle className="h-3.5 w-3.5 text-primary" />
+              <span>Multi-Portal AI Career Navigation Engine</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-tight">
+              Unified Job Discovery &{' '}
+              <span className="underline decoration-primary/40 underline-offset-8">
+                Semantic Match Intelligence
+              </span>
+            </h1>
+
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              CareerPilot AI combines continuous multi-source job scraping across 9+ portals with pgvector resume vector matching and automated cover letter generation—all in one unified dashboard.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              <Link href="/register" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto gap-2 px-8">
+                  <UserPlus className="h-5 w-5" />
+                  <span>Create Free Account</span>
+                </Button>
+              </Link>
+              <a href="#simulator" className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2 px-8">
+                  <Play className="h-4 w-4" />
+                  <span>Try Interactive Simulator</span>
+                </Button>
+              </a>
+            </div>
+
+            {/* Feature Badges */}
+            <div className="pt-8 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                9+ Integrated Scrapers
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                Vector Cosine Similarity
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                LLM Cover Letter Drafting
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* INTERACTIVE AI MATCH & COVER LETTER SIMULATOR (Using App Card System) */}
+        <section id="simulator" className="py-16 px-6 max-w-6xl mx-auto border-b">
+          <div className="text-center mb-10 space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Interactive Match Scoring Simulator
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
+              Explore how our internal vector matching engine evaluates candidate roles against semantic skills.
+            </p>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
-            Your AI Agent for{' '}
-            <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-emerald-400 bg-clip-text text-transparent">
-              Multi-Source Job Hunting
-            </span>
-          </h1>
-
-          <p className="text-lg sm:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed">
-            Stop searching manually. CareerPilot AI aggregates jobs across{' '}
-            <span className="text-slate-200 font-semibold">BrightData, Remotive, The Muse, LinkedIn, Naukri</span>{' '}
-            and more — automatically scoring each role against your resume and generating bespoke AI cover letters.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link
-              href="/register"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-base bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-xl shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-            >
-              <UserPlus className="w-5 h-5" />
-              <span>Launch Your Autonomous Search</span>
-            </Link>
-            <a
-              href="#simulator"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-base bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition-all flex items-center justify-center gap-2"
-            >
-              <Play className="w-4 h-4 text-indigo-400 fill-indigo-400" />
-              <span>Try Live AI Simulator</span>
-            </a>
+          {/* Persona Tabs */}
+          <div className="flex flex-wrap justify-center gap-2 mb-8">
+            {PERSONAS.map((p) => {
+              const isActive = activePersona.id === p.id;
+              return (
+                <Button
+                  key={p.id}
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActivePersona(p)}
+                  className="gap-2"
+                >
+                  <Sparkle className="h-4 w-4" />
+                  <span>{p.title.split('@')[0].trim()}</span>
+                </Button>
+              );
+            })}
           </div>
 
-          {/* Quick Trust Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-slate-500">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              9+ Job Portal Integrations
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-indigo-500" />
-              pgvector Semantic Embeddings
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-purple-500" />
-              Instant Cover Letter Generation
-            </span>
-          </div>
-        </div>
-      </section>
+          {/* Card styled exactly like internal App Cards */}
+          <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-6 sm:p-8">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{activePersona.source}</Badge>
+                  <span className="text-xs text-muted-foreground">{activePersona.location}</span>
+                  <span className="text-xs text-muted-foreground">• {activePersona.salary}</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-foreground">{activePersona.title}</h3>
+              </div>
 
-      {/* INTERACTIVE SIMULATOR (UI/UX Pro Max Showcase) */}
-      <section id="simulator" className="relative z-10 py-16 px-6 max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-            Interactive AI Match & Cover Letter Simulator
-          </h2>
-          <p className="text-slate-400 text-sm">
-            Select a target role below to see how CareerPilot AI evaluates semantic alignment and composes cover letters.
-          </p>
-        </div>
+              {/* Vector Score Display matching JobCard */}
+              <div className="flex items-center gap-4 bg-muted/60 border px-5 py-3 rounded-lg">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-lg shadow-sm">
+                  {activePersona.score}%
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Match Score
+                  </div>
+                  <div className="text-sm font-bold text-foreground">{activePersona.verdict}</div>
+                </div>
+              </div>
+            </div>
 
-        {/* Persona Selector Tabs */}
-        <div className="flex flex-wrap justify-center gap-3 mb-8">
-          {PERSONAS.map((p) => {
-            const isActive = activePersona.id === p.id;
-            return (
+            {/* Sub navigation inside card */}
+            <div className="flex gap-4 mt-6 mb-6 border-b">
               <button
-                key={p.id}
-                onClick={() => setActivePersona(p)}
-                className={`px-5 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2.5 border ${
-                  isActive
-                    ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                onClick={() => setActiveTab('match')}
+                className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+                  activeTab === 'match'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Sparkles className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
-                <span>{p.title.split('@')[0].trim()}</span>
+                Semantic Match Breakdown
               </button>
-            );
-          })}
-        </div>
-
-        {/* Interactive Match Card Preview */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-800">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                  {activePersona.source}
-                </span>
-                <span className="text-xs text-slate-400">{activePersona.location}</span>
-                <span className="text-xs text-slate-400">• {activePersona.salary}</span>
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-white">{activePersona.title}</h3>
+              <button
+                onClick={() => setActiveTab('cover')}
+                className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+                  activeTab === 'cover'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                AI Generated Cover Letter
+              </button>
             </div>
 
-            {/* AI Vector Score Pill */}
-            <div className="flex items-center gap-4 bg-slate-950/80 border border-slate-800 px-5 py-3 rounded-xl">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-500 to-indigo-500 flex items-center justify-center text-white font-extrabold text-lg shadow-md">
-                {activePersona.score}%
+            {activeTab === 'match' ? (
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Key Vector Alignment Reasons:
+                </h4>
+                {activePersona.reasons.map((reason, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3.5 rounded-lg border bg-muted/30">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                    <span className="text-sm text-foreground">{reason}</span>
+                  </div>
+                ))}
               </div>
-              <div>
-                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                  Vector Match Score
+            ) : (
+              <div className="p-5 rounded-lg border bg-muted/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Bot className="h-4 w-4" />
+                    Tailored for {activePersona.title.split('@')[1].trim()}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">Generated via CareerPilot LLM Engine</span>
                 </div>
-                <div className="text-sm font-bold text-emerald-400">{activePersona.verdict}</div>
+                <p className="text-sm text-foreground italic leading-relaxed">{activePersona.coverLetterSnippet}</p>
               </div>
-            </div>
+            )}
+          </div>
+        </section>
+
+        {/* 9 SCRAPER PORTALS MATRIX (Unified Card Grid) */}
+        <section id="scrapers" className="py-16 px-6 max-w-6xl mx-auto border-b">
+          <div className="text-center mb-12 space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              9 Integrated Scraper & API Sources
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
+              Our automated discovery engine aggregates live API feeds and intelligent local fallback scrapers into a unified PostgreSQL schema.
+            </p>
           </div>
 
-          {/* Sub Tabs inside Preview Card */}
-          <div className="flex gap-4 mt-6 mb-6 border-b border-slate-800/80">
-            <button
-              onClick={() => setActiveTab('match')}
-              className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
-                activeTab === 'match'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              AI Semantic Fit Breakdown
-            </button>
-            <button
-              onClick={() => setActiveTab('cover')}
-              className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
-                activeTab === 'cover'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Auto-Generated Cover Letter
-            </button>
-          </div>
-
-          {activeTab === 'match' ? (
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                Why CareerPilot AI Recommends This Role:
-              </h4>
-              {activePersona.reasons.map((reason, i) => (
-                <div key={i} className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-sm text-slate-300">{reason}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {SCRAPERS.map((s) => (
+              <div key={s.name} className="p-5 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-bold text-foreground text-base">{s.name}</span>
+                  <Badge variant={s.status.includes('Live') ? 'success' : 'secondary'}>
+                    {s.status}
+                  </Badge>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-5 rounded-xl bg-slate-950/80 border border-slate-800/80">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-indigo-400 font-semibold flex items-center gap-1.5">
-                  <Bot className="w-4 h-4" />
-                  Customized for {activePersona.title.split('@')[1].trim()}
-                </span>
-                <span className="text-[11px] text-slate-500">Generated in 1.4s via LLM Engine</span>
+                <div className="text-xs text-muted-foreground mb-1">{s.type}</div>
+                <div className="text-xs font-medium text-foreground">{s.count}</div>
               </div>
-              <p className="text-sm text-slate-300 italic leading-relaxed">{activePersona.coverLetterSnippet}</p>
-            </div>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      {/* 9 SCRAPER SOURCES MATRIX */}
-      <section id="scrapers" className="relative z-10 py-16 px-6 max-w-6xl mx-auto border-t border-slate-900">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Multi-Tier Scraper Architecture
-          </h2>
-          <p className="text-slate-400 text-sm max-w-2xl mx-auto">
-            Our pipeline continuously sweeps 7 primary API portals and intelligently executes Tier-2 local scrapers as a resilient fallback.
-          </p>
-        </div>
+        {/* 3-STEP WORKFLOW */}
+        <section id="workflow" className="py-16 px-6 max-w-6xl mx-auto border-b">
+          <div className="text-center mb-12 space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Autonomous 3-Step Workflow
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Continuous background job discovery, vector scoring, and application assistance.
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SCRAPERS.map((s) => (
-            <div
-              key={s.name}
-              className="p-5 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-bold text-white text-base">{s.name}</span>
-                <span
-                  className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                    s.status.includes('Live')
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                  }`}
-                >
-                  {s.status}
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm space-y-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+                01
               </div>
-              <div className="text-xs text-slate-400 mb-1">{s.type}</div>
-              <div className="text-xs font-medium text-slate-500">{s.count}</div>
+              <h3 className="text-lg font-bold text-foreground">Multi-Portal Aggregation</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Queries Tier-1 APIs and Tier-2 scrapers in parallel, deduplicating listings by unique URL automatically.
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* 3-STEP WORKFLOW */}
-      <section id="workflow" className="relative z-10 py-20 px-6 max-w-6xl mx-auto border-t border-slate-900">
-        <div className="text-center mb-16">
-          <h2 className="text-2xl sm:text-4xl font-bold text-white mb-3">
-            How Autonomous Job Hunting Works
+            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm space-y-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+                02
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Semantic Vector Match</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Uses pgvector similarity to score each job description against your profile and resume experience.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm space-y-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+                03
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Automated Cover Letters</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Drafts highly contextual cover letters tailored to each company and role with one click.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* FINAL CTA matching Internal Software */}
+        <section className="py-20 px-6 max-w-4xl mx-auto text-center space-y-6">
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+            Get Started with CareerPilot AI
           </h2>
-          <p className="text-slate-400 text-sm">Three automated phases running 24/7 on your behalf.</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 relative">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold mb-5">
-              01
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Aggregated Scraping</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Sweeps tech job boards and enterprise portals simultaneously, deduplicating listings by unique URL in PostgreSQL.
-            </p>
-          </div>
-
-          <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 relative">
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-bold mb-5">
-              02
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Vector Matching Engine</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Uses pgvector cosine similarity to rank job descriptions against your resume and profile skills automatically.
-            </p>
-          </div>
-
-          <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 relative">
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold mb-5">
-              03
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">1-Click Application Workflow</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Generates role-specific cover letters and tracks every application status from Submission to Interview.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* FINAL CTA BANNER */}
-      <section className="relative z-10 py-20 px-6 max-w-5xl mx-auto">
-        <div className="rounded-3xl bg-gradient-to-r from-indigo-900/50 via-purple-900/40 to-slate-900 border border-indigo-500/30 p-8 sm:p-14 text-center relative overflow-hidden shadow-2xl">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">
-            Ready to Upgrade Your Career Pipeline?
-          </h2>
-          <p className="text-slate-300 text-base max-w-2xl mx-auto mb-8">
-            Create your free account today and let CareerPilot AI discover, score, and draft applications for you.
+          <p className="text-muted-foreground text-base max-w-xl mx-auto">
+            Experience the same streamlined interface from discovery to interview tracking.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/register"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-base bg-white hover:bg-slate-100 text-slate-950 shadow-xl transition-all"
-            >
-              Get Started Now
+            <Link href="/register" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto gap-2 px-8">
+                <UserPlus className="h-5 w-5" />
+                <span>Create Account</span>
+              </Button>
             </Link>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-base bg-slate-900/80 hover:bg-slate-900 text-white border border-slate-700 transition-all"
-            >
-              Existing Member Sign In
+            <Link href="/login" className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2 px-8">
+                <Lock className="h-4 w-4" />
+                <span>Sign In</span>
+              </Button>
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-900 py-10 px-6 text-center text-xs text-slate-500">
+      {/* COHESIVE FOOTER */}
+      <footer className="border-t py-8 px-6 text-center text-xs text-muted-foreground bg-muted/20">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span className="font-semibold text-slate-400">CareerPilot AI Pro Max</span>
+            <Briefcase className="h-4 w-4 text-foreground" />
+            <span className="font-semibold text-foreground">CareerPilot AI</span>
           </div>
-          <p>© 2026 CareerPilot AI. Autonomous Agentic Career System.</p>
+          <p>© 2026 CareerPilot AI. Unified Autonomous Job Platform.</p>
           <div className="flex gap-6">
-            <Link href="/login" className="hover:text-slate-300">
+            <Link href="/login" className="hover:text-foreground transition-colors">
               Sign In
             </Link>
-            <Link href="/register" className="hover:text-slate-300">
+            <Link href="/register" className="hover:text-foreground transition-colors">
               Register
             </Link>
           </div>
