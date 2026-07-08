@@ -116,11 +116,7 @@ export interface DashboardStats {
 
 export interface ScraperStatus {
   total_jobs: number;
-  source_breakdown: {
-    linkedin: number;
-    naukri: number;
-    manual: number;
-  };
+  source_breakdown: Record<string, number>;
   last_scrape_at: string | null;
   is_scraping: boolean;
 }

@@ -135,15 +135,26 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
         interview_rate = round((interview_count / app_count) * 100, 1)
 
     # Scraper status — latest run and source breakdown
-    total_linkedin = db.execute(
-        text("SELECT COUNT(*) FROM job_postings WHERE source = 'linkedin'"),
-    ).scalar() or 0
-    total_naukri = db.execute(
-        text("SELECT COUNT(*) FROM job_postings WHERE source = 'naukri'"),
-    ).scalar() or 0
-    total_manual = db.execute(
-        text("SELECT COUNT(*) FROM job_postings WHERE source = 'manual'"),
-    ).scalar() or 0
+    source_rows = db.execute(
+        text("SELECT source, COUNT(*) FROM job_postings GROUP BY source")
+    ).fetchall()
+    source_breakdown = {
+        "brightdata": 0,
+        "remotive": 0,
+        "arbeitnow": 0,
+        "themuse": 0,
+        "adzuna": 0,
+        "jsearch": 0,
+        "findwork": 0,
+        "linkedin": 0,
+        "naukri": 0,
+        "manual": 0,
+    }
+    total_jobs = 0
+    for src, count in source_rows:
+        if src:
+            source_breakdown[src] = int(count)
+            total_jobs += int(count)
 
     last_scrape = db.execute(
         text("SELECT MAX(created_at) FROM job_postings"),
@@ -158,12 +169,8 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
         "top_matches": top_matches,
         "recent_activity": recent_activity,
         "scraper": {
-            "total_jobs": total_linkedin + total_naukri + total_manual,
-            "source_breakdown": {
-                "linkedin": total_linkedin,
-                "naukri": total_naukri,
-                "manual": total_manual,
-            },
+            "total_jobs": total_jobs,
+            "source_breakdown": source_breakdown,
             "last_scrape_at": last_scrape_iso,
             "is_scraping": False,
         },

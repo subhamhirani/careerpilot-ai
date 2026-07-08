@@ -7,10 +7,11 @@ Optimized version with shorter timeouts and fewer polling iterations.
 import json
 import sys
 import time
+import os
 import urllib.request
 import urllib.error
 
-BASE = "http://localhost:7899/api"
+BASE = os.getenv("API_BASE", "http://localhost:7899/api")
 SUFFIX = sys.argv[1] if len(sys.argv) > 1 else str(int(time.time()))
 EMAIL = f"e2e_fast_{SUFFIX}@careerpilot.ai"
 PASSWORD = "TestPass123!"
