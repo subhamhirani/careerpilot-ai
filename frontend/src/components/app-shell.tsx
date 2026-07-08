@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Header } from '@/components/header';
 import { Sidebar } from '@/components/sidebar';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/intro'];
+const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/intro'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isPublicPath = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + '/')
+    (p) => p === '/' ? pathname === '/' : (pathname === p || pathname.startsWith(p + '/'))
   );
 
   // Redirect unauthenticated users away from protected routes
