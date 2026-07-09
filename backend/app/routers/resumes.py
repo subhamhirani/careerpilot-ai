@@ -40,7 +40,7 @@ def _to_uuid(value: str) -> uuid.UUID:
     try:
         return uuid.UUID(str(value))
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid resume id")
+        raise HTTPException(status_code=404, detail="Resume not found")
 
 
 def _serialize_resume(row) -> dict:

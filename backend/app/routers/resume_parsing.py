@@ -149,9 +149,18 @@ async def parse_resume(
                 {"uid": user_id},
             ).fetchone()
 
+            def _safe_str(val: Any) -> str:
+                if val is None:
+                    return ""
+                if isinstance(val, dict):
+                    return " ".join(str(v) for v in val.values() if v)
+                if isinstance(val, list):
+                    return ", ".join(str(v) for v in val if v)
+                return str(val)
+
             profile_data = {}
             if parsed.get("full_name"):
-                profile_data["full_name"] = parsed["full_name"]
+                profile_data["full_name"] = _safe_str(parsed["full_name"])
             if parsed.get("skills"):
                 profile_data["skills"] = json.dumps(parsed["skills"])
             if parsed.get("experience"):
@@ -161,7 +170,7 @@ async def parse_resume(
             if parsed.get("certifications"):
                 profile_data["certifications"] = json.dumps(parsed["certifications"])
             if parsed.get("summary"):
-                profile_data["summary"] = parsed["summary"]
+                profile_data["summary"] = _safe_str(parsed["summary"])
 
             if profile_data:
                 if profile:

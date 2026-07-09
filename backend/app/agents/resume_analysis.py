@@ -89,6 +89,21 @@ class UserProfile:
     salary_expectation: str = ""
     embedding: list[float] | None = None  # populated after generation
 
+    def __post_init__(self):
+        def _to_str(val: Any) -> str:
+            if val is None:
+                return ""
+            if isinstance(val, dict):
+                return " ".join(str(v) for v in val.values() if v)
+            if isinstance(val, list):
+                return ", ".join(str(v) for v in val if v)
+            return str(val)
+
+        for attr in ("full_name", "email", "phone", "linkedin_url", "github_url", "portfolio_url", "summary", "current_role", "employment_type", "salary_expectation"):
+            val = getattr(self, attr, "")
+            if not isinstance(val, str):
+                setattr(self, attr, _to_str(val))
+
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d.pop("embedding", None)

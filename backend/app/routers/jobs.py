@@ -29,7 +29,7 @@ def _get_db():
     finally:
         engine.dispose()
 
-@router.get("/")
+@router.get("")
 async def list_jobs(
     status: Optional[str] = Query(None, description="Filter by status"),
     tier: Optional[str] = Query(None, description="Filter by match tier"),

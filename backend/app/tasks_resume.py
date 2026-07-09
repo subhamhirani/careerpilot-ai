@@ -154,31 +154,51 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
             {"uid": user_id},
         ).fetchone()
 
-        # Serialize JSONB columns using json.dumps for psycopg2 raw SQL execution
-        skills_val = json.dumps(profile.skills if isinstance(profile.skills, list) else list(profile.skills or []))
-        exp_val = json.dumps(profile.work_experience if isinstance(profile.work_experience, list) else list(profile.work_experience or []))
-        edu_val = json.dumps(profile.education if isinstance(profile.education, list) else list(profile.education or []))
-        targets_val = json.dumps(profile.preferred_roles if isinstance(profile.preferred_roles, list) else list(profile.preferred_roles or []))
-        locs_val = ", ".join(str(l) for l in profile.preferred_locations) if isinstance(profile.preferred_locations, list) else str(profile.preferred_locations or "")
+        # Serialize all parameters safely for psycopg2 raw SQL execution
+        def _safe_str(val: Any) -> str:
+            if val is None:
+                return ""
+            if isinstance(val, dict):
+                return " ".join(str(v) for v in val.values() if v)
+            if isinstance(val, list):
+                return ", ".join(str(v) for v in val if v)
+            return str(val)
+
+        def _safe_json_list(val: Any) -> str:
+            if val is None:
+                return "[]"
+            if isinstance(val, list):
+                return json.dumps(val)
+            if isinstance(val, dict):
+                return json.dumps([val])
+            if isinstance(val, str):
+                try:
+                    parsed = json.loads(val)
+                    return json.dumps(parsed if isinstance(parsed, list) else [parsed])
+                except Exception:
+                    return json.dumps([val] if val.strip() else [])
+            return "[]"
+
+        params = {
+            "uid": str(user_id),
+            "name": _safe_str(profile.full_name),
+            "phone": _safe_str(profile.phone),
+            "summary": _safe_str(profile.summary),
+            "skills": _safe_json_list(profile.skills),
+            "exp": _safe_json_list(profile.work_experience),
+            "edu": _safe_json_list(profile.education),
+            "targets": _safe_json_list(profile.preferred_roles),
+            "locs": _safe_str(profile.preferred_locations),
+        }
 
         if not existing_profile:
+            params["id"] = str(uuid.uuid4())
             session.execute(
                 text(
                     "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, skills, experience, education, preferred_roles, preferred_location, created_at, updated_at) "
                     "VALUES (:id, :uid, :name, :phone, :summary, :skills, :exp, :edu, :targets, :locs, NOW(), NOW())"
                 ),
-                {
-                    "id": str(uuid.uuid4()),
-                    "uid": user_id,
-                    "name": profile.full_name or "",
-                    "phone": profile.phone or "",
-                    "summary": profile.summary or "",
-                    "skills": skills_val,
-                    "exp": exp_val,
-                    "edu": edu_val,
-                    "targets": targets_val,
-                    "locs": locs_val,
-                },
+                params,
             )
         else:
             session.execute(
@@ -188,17 +208,7 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                     "preferred_roles = :targets, "
                     "preferred_location = :locs, updated_at = NOW() WHERE user_id = :uid"
                 ),
-                {
-                    "uid": user_id,
-                    "name": profile.full_name or "",
-                    "phone": profile.phone or "",
-                    "summary": profile.summary or "",
-                    "skills": skills_val,
-                    "exp": exp_val,
-                    "edu": edu_val,
-                    "targets": targets_val,
-                    "locs": locs_val,
-                },
+                params,
             )
         session.commit()
 

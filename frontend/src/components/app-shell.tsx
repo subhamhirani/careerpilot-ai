@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isPublicPath = PUBLIC_PATHS.some((p) => {
-    if (p === '/') return pathname === '/';
+    if (p === '/') return pathname === '/' && !isAuthenticated;
     return pathname === p || pathname.startsWith(p + '/');
   });
 
@@ -30,6 +30,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.push('/login');
     }
   }, [isClient, isLoadingAuth, isAuthenticated, isPublicPath, router]);
+
+  // Redirect authenticated users away from auth pages (/login, /register, /forgot-password)
+  useEffect(() => {
+    const isAuthPage = ['/login', '/register', '/forgot-password'].some(
+      (p) => pathname === p || pathname.startsWith(p + '/')
+    );
+    if (isClient && !isLoadingAuth && isAuthenticated && isAuthPage) {
+      router.push('/');
+    }
+  }, [isClient, isLoadingAuth, isAuthenticated, pathname, router]);
 
   // For public routes, render children directly
   if (isPublicPath) {
