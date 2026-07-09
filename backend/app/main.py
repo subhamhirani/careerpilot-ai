@@ -37,9 +37,12 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup / shutdown lifecycle."""
-    # (Database connection pool, model loading, etc. go here)
     yield
-    # (Cleanup goes here)
+    from .agencies import close_pool
+    from .db import dispose_db
+
+    await close_pool()
+    dispose_db()
 
 
 # ── App factory ──────────────────────────────────────────────

@@ -78,11 +78,11 @@ function LiveProcessesCard() {
           const Icon = cfg.icon;
           const clampedProgress = Math.min(100, Math.max(0, proc.progress_pct || 0));
           return (
-            <div key={proc.id} className="space-y-1">
+            <div key={proc.id} className="space-y-1.5 p-2 rounded-lg border bg-muted/20">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium truncate mr-2">{proc.task_name}</span>
-                <span className={`text-xs shrink-0 flex items-center gap-1 ${cfg.color}`}>
-                  <Icon className={`h-3 w-3 ${proc.status === 'running' ? 'animate-spin' : ''}`} />
+                <span className={`text-xs shrink-0 flex items-center gap-1 font-medium ${cfg.color}`}>
+                  <Icon className={`h-3.5 w-3.5 ${proc.status === 'running' ? 'animate-spin' : ''}`} />
                   {cfg.label} ({clampedProgress}%)
                 </span>
               </div>
@@ -116,18 +116,53 @@ export default function DashboardPage() {
   if (loading && !stats) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-96" />
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48 rounded-md" />
+          <Skeleton className="h-4 w-72 rounded-md" />
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-lg" />
+            <Card key={i} className="p-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+              </div>
+              <Skeleton className="h-7 w-16 rounded" />
+              <Skeleton className="h-3 w-32 rounded" />
+            </Card>
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-64 rounded-lg" />
-          <Skeleton className="h-64 rounded-lg" />
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-28 rounded" />
+              <Skeleton className="h-8 w-20 rounded" />
+            </div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-48 rounded" />
+                  <Skeleton className="h-3 w-32 rounded" />
+                </div>
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+            ))}
+          </Card>
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-32 rounded" />
+              <Skeleton className="h-8 w-20 rounded" />
+            </div>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <Skeleton className="h-5 w-5 rounded-full mt-0.5" />
+                <div className="space-y-1 flex-1">
+                  <Skeleton className="h-4 w-56 rounded" />
+                  <Skeleton className="h-3 w-24 rounded" />
+                </div>
+              </div>
+            ))}
+          </Card>
         </div>
       </div>
     );
@@ -197,19 +232,19 @@ export default function DashboardPage() {
           <CardContent className="space-y-4">
             {s?.top_matches && s.top_matches.length > 0 ? (
               s.top_matches.slice(0, 5).map((job) => (
-                <div
-                  key={job.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{job.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {job.company} — {job.location}
-                    </p>
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 hover:border-primary/25 transition-all duration-150"
+                  >
+                    <div className="min-w-0 flex-1 mr-3">
+                      <p className="text-sm font-medium truncate text-foreground">{job.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {job.company} — {job.location}
+                      </p>
+                    </div>
+                    <MatchScoreBadge score={job.match_score ?? 0} size="sm" />
                   </div>
-                  <MatchScoreBadge score={job.match_score ?? 0} size="sm" />
-                </div>
-              ))
+                ))
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Briefcase className="h-8 w-8 mx-auto mb-2 opacity-50" />

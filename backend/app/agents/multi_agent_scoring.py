@@ -220,19 +220,34 @@ class WebResearchAgent:
 
         return result
 
-    def research_batch(self, companies: list[str]) -> dict[str, dict]:
-        """Deduplicated research for a list of company names."""
+    def research_batch(self, companies: list[str], max_workers: int = 8) -> dict[str, dict]:
+        """Deduplicated concurrent research for a list of company names."""
+        import concurrent.futures
+
+        unique_companies: list[str] = []
         seen: set[str] = set()
-        results: dict[str, dict] = {}
         for c in companies:
             key = c.strip().lower()
             if key and key not in seen and key not in ("unknown", "", "n/a"):
                 seen.add(key)
-                try:
-                    results[c] = self.research(c)
-                except Exception as exc:
-                    logger.warning("Research failed for '%s': %s", c, exc)
-                    results[c] = self._empty()
+                unique_companies.append(c)
+
+        results: dict[str, dict] = {}
+
+        def _research_safe(company_name: str) -> tuple[str, dict]:
+            try:
+                return company_name, self.research(company_name)
+            except Exception as exc:
+                logger.warning("Research failed for '%s': %s", company_name, exc)
+                return company_name, self._empty()
+
+        if not unique_companies:
+            return results
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(max_workers, len(unique_companies))) as executor:
+            for c_name, c_data in executor.map(_research_safe, unique_companies):
+                results[c_name] = c_data
+
         return results
 
     # ------------------------------------------------------------------
@@ -615,11 +630,14 @@ class MultiAgentScorer:
                 company_data = web.research_batch(companies)
             finally:
                 web.close()
+                self._web_agent = None
 
         # ── Phase 3: LLM synthesis for top M jobs ─────────────────
         synthesis = self._get_synthesis_agent()
         results: list[dict] = []
-        for job in scored[:_MAX_JOBS_FOR_LLM]:
+        top_jobs = scored[:_MAX_JOBS_FOR_LLM]
+
+        def _synthesize_job(job: dict) -> dict:
             vector_data = {
                 "vector_score": job.get("vector_score", 0.5),
                 "skills_ratio": job.get("skills_ratio", 0),
@@ -628,10 +646,12 @@ class MultiAgentScorer:
             }
             cd = company_data.get(job.get("company", ""), {})
             enriched = synthesis.synthesize(profile, job, vector_data, cd)
-            results.append({
-                **job,
-                **enriched,
-            })
+            return {**job, **enriched}
+
+        if top_jobs:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(top_jobs))) as executor:
+                results = list(executor.map(_synthesize_job, top_jobs))
 
         # For jobs beyond the LLM cap, use heuristic-only scoring
         for job in scored[_MAX_JOBS_FOR_LLM:]:

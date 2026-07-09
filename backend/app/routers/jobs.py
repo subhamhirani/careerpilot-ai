@@ -184,6 +184,11 @@ async def scrape_status(
 @router.get("/{job_id}")
 async def get_job(job_id: str, user_id: str = Depends(get_current_user_id), db: Session = Depends(_get_db)):
     """Get a specific job posting with match details (only if mapped to this user)."""
+    try:
+        uuid.UUID(str(job_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="Job not found")
+
     row = db.execute(
         text("""
             SELECT jp.id, jp.title, jp.description, jp.location, jp.source_url, jp.source_platform,

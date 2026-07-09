@@ -55,12 +55,12 @@ export function Sidebar() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-16 items-center justify-between px-4 md:hidden">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground">
-              <Rocket className="h-4 w-4" />
+        <div className="flex h-16 items-center justify-between px-4 md:hidden border-b border-sidebar-border">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <Briefcase className="h-4 w-4" />
             </div>
-            <span className="font-bold">CareerPilot</span>
+            <span className="font-bold tracking-tight">CareerPilot AI</span>
           </Link>
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
@@ -68,11 +68,11 @@ export function Sidebar() {
         </div>
 
         <div className="hidden md:flex h-16 items-center px-4 border-b border-sidebar-border">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground">
-              <Rocket className="h-4 w-4" />
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-105">
+              <Briefcase className="h-4 w-4" />
             </div>
-            <span className="font-bold text-lg">CareerPilot</span>
+            <span className="font-bold text-lg tracking-tight">CareerPilot AI</span>
           </Link>
         </div>
 
@@ -86,13 +86,13 @@ export function Sidebar() {
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
                     isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground hover:translate-x-0.5'
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
+                  <item.icon className={cn('h-4 w-4 shrink-0', isActive && 'text-primary')} />
                   {item.label}
                 </Link>
               );
@@ -102,10 +102,15 @@ export function Sidebar() {
           <Separator className="my-4 mx-3 w-auto" />
 
           <div className="px-3">
-            <div className="rounded-lg bg-sidebar-accent/50 p-3">
-              <p className="text-xs font-medium">AI Job Matching</p>
-              <p className="text-xs text-sidebar-foreground/60 mt-1">
-                Let AI find and apply to the best jobs for you.
+            <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold tracking-tight">AI Matching Engine</span>
+                <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                  Active
+                </span>
+              </div>
+              <p className="text-xs text-sidebar-foreground/60 leading-relaxed">
+                Autonomous multi-source scrapers and vector match engine running.
               </p>
             </div>
           </div>

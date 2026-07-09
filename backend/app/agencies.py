@@ -42,21 +42,34 @@ _MAX_POOL_SIZE: int = int(os.getenv("DB_POOL_MAX", "10"))
 #  Global pool reference
 # ──────────────────────────────────────────────
 
+import asyncio
+
 _pool: Any = None  # asyncpg.Pool
+_pool_lock: asyncio.Lock | None = None
+
+
+def _get_pool_lock() -> asyncio.Lock:
+    global _pool_lock
+    if _pool_lock is None:
+        _pool_lock = asyncio.Lock()
+    return _pool_lock
 
 
 async def get_pool() -> Any:
     """Return the global asyncpg connection pool, creating it if needed."""
     global _pool
     if _pool is None:
-        import asyncpg
+        lock = _get_pool_lock()
+        async with lock:
+            if _pool is None:
+                import asyncpg
 
-        _pool = await asyncpg.create_pool(
-            dsn=_DSN,
-            min_size=_MIN_POOL_SIZE,
-            max_size=_MAX_POOL_SIZE,
-            command_timeout=30,
-        )
+                _pool = await asyncpg.create_pool(
+                    dsn=_DSN,
+                    min_size=_MIN_POOL_SIZE,
+                    max_size=_MAX_POOL_SIZE,
+                    command_timeout=30,
+                )
     return _pool
 
 
@@ -64,8 +77,11 @@ async def close_pool() -> None:
     """Close the global connection pool (call during app shutdown)."""
     global _pool
     if _pool is not None:
-        await _pool.close()
-        _pool = None
+        lock = _get_pool_lock()
+        async with lock:
+            if _pool is not None:
+                await _pool.close()
+                _pool = None
 
 
 # ──────────────────────────────────────────────

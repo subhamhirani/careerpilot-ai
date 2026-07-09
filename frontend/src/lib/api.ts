@@ -38,13 +38,29 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   };
 
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    const token =
+      sessionStorage.getItem('access_token') ||
+      localStorage.getItem('access_token') ||
+      sessionStorage.getItem('careerpilot_token') ||
+      localStorage.getItem('careerpilot_token');
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
   }
 
   return headers;
+}
+
+function handleAuthError(status: number) {
+  if (status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('careerpilot_token');
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+    sessionStorage.removeItem('careerpilot_token');
+    window.dispatchEvent(new Event('auth:unauthorized'));
+  }
 }
 
 async function request<T>(
@@ -64,6 +80,7 @@ async function request<T>(
     });
 
     if (!res.ok) {
+      handleAuthError(res.status);
       let errorMessage = `HTTP ${res.status}`;
       try {
         const errorBody = await res.json();
@@ -104,6 +121,7 @@ export const api = {
     delete (headers as Record<string, string>)['Content-Type'];
     const res = await fetch(url, { method: 'POST', headers, body });
     if (!res.ok) {
+      handleAuthError(res.status);
       let errorMessage = `HTTP ${res.status}`;
       try {
         const errorBody = await res.json();

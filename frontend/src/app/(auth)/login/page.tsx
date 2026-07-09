@@ -16,6 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       toast.success("Welcome back!");
       router.push("/");
     } catch (err) {
@@ -87,6 +88,18 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+          </div>
+          <div className="flex items-center space-x-2 pt-1">
+            <input
+              type="checkbox"
+              id="remember"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+            />
+            <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+              Remember me on this device
+            </Label>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">

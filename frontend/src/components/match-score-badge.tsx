@@ -4,10 +4,10 @@ import { cn } from '@/lib/utils';
 import type { MatchScoreBadgeProps } from '@/types';
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100';
-  if (score >= 60) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100';
-  if (score >= 40) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100';
-  return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100';
+  if (score >= 80) return 'border border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-300';
+  if (score >= 60) return 'border border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-800/60 dark:bg-blue-950/60 dark:text-blue-300';
+  if (score >= 40) return 'border border-amber-200/80 bg-amber-50 text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/60 dark:text-amber-300';
+  return 'border border-red-200/80 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/60 dark:text-red-300';
 }
 
 function getScoreLabel(score: number): string {
