@@ -150,11 +150,10 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
         "naukri": 0,
         "manual": 0,
     }
-    total_jobs = 0
+    total_jobs = db.execute(text("SELECT COUNT(*) FROM job_postings")).scalar() or 0
     for src, count in source_rows:
-        if src:
+        if src and src in source_breakdown:
             source_breakdown[src] = int(count)
-            total_jobs += int(count)
 
     last_scrape = db.execute(
         text("SELECT MAX(created_at) FROM job_postings"),
@@ -162,7 +161,9 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user_id), db: S
     last_scrape_iso = last_scrape.isoformat() if last_scrape else None
 
     return {
-        "total_jobs_found": match_count,
+        "total_jobs_found": total_jobs,
+        "matched_jobs": match_count,
+        "resume_count": resume_count,
         "total_applications_sent": app_count,
         "pending_approvals": pending,
         "interview_rate": interview_rate,

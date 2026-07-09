@@ -21,6 +21,7 @@ import {
   Briefcase,
   Zap,
   RotateCcw,
+  Trash,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
@@ -31,7 +32,15 @@ const statusConfig = {
   failed: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Failed' },
 };
 
-function ProcessCard({ process, onRetry }: { process: ProcessStatus; onRetry?: (id: string) => void }) {
+function ProcessCard({
+  process,
+  onRetry,
+  onDismiss,
+}: {
+  process: ProcessStatus;
+  onRetry?: (id: string) => void;
+  onDismiss?: (id: string) => void;
+}) {
   const config = statusConfig[process.status] || statusConfig.queued;
   const Icon = config.icon;
 
@@ -72,16 +81,31 @@ function ProcessCard({ process, onRetry }: { process: ProcessStatus; onRetry?: (
               <p className="text-xs text-muted-foreground">
                 {new Date(process.updated_at).toLocaleString()}
               </p>
-              {process.status === 'failed' && onRetry && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs text-blue-500 hover:text-blue-700"
-                  onClick={() => onRetry(process.id)}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Retry
-                </Button>
+              {process.status === 'failed' && (
+                <div className="flex items-center gap-1">
+                  {onRetry && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-blue-500 hover:text-blue-700"
+                      onClick={() => onRetry(process.id)}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Retry
+                    </Button>
+                  )}
+                  {onDismiss && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-red-500 hover:text-red-700"
+                      onClick={() => onDismiss(process.id)}
+                    >
+                      <Trash className="h-3 w-3 mr-1" />
+                      Dismiss
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -131,6 +155,19 @@ export default function ProcessesPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (processId: string) => {
+      await api.delete(`/process-statuses/${processId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['process-statuses'] });
+      toast.success('Process dismissed');
+    },
+    onError: () => {
+      toast.error('Failed to dismiss process');
+    },
+  });
+
   const handleRetry = (processId: string) => {
     const process = processes?.find(p => p.id === processId);
     if (process?.task_name.includes('Resume')) {
@@ -138,6 +175,19 @@ export default function ProcessesPage() {
       return;
     }
     retryMutation.mutate(processId);
+  };
+
+  const handleDismiss = (processId: string) => {
+    deleteMutation.mutate(processId);
+  };
+
+  const handleClearFailed = async () => {
+    if (!failedProcesses.length) return;
+    for (const p of failedProcesses) {
+      await api.delete(`/process-statuses/${p.id}`);
+    }
+    queryClient.invalidateQueries({ queryKey: ['process-statuses'] });
+    toast.success('Cleared failed processes');
   };
 
   const activeProcesses = processes?.filter((p) => p.status === 'running' || p.status === 'queued') || [];
@@ -165,13 +215,24 @@ export default function ProcessesPage() {
       {/* Failed Processes with Retry */}
       {failedProcesses.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            Failed ({failedProcesses.length})
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              Failed ({failedProcesses.length})
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-red-500 hover:text-red-700"
+              onClick={handleClearFailed}
+            >
+              <Trash className="h-3.5 w-3.5 mr-1" />
+              Clear All Failed
+            </Button>
+          </div>
           <div className="space-y-3">
             {failedProcesses.map((p) => (
-              <ProcessCard key={p.id} process={p} onRetry={handleRetry} />
+              <ProcessCard key={p.id} process={p} onRetry={handleRetry} onDismiss={handleDismiss} />
             ))}
           </div>
         </div>

@@ -76,6 +76,9 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("just_registered", "true");
+      }
       await register(fullName, email, password);
       toast.success("Account created!");
       router.push("/onboarding");

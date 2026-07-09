@@ -10,6 +10,7 @@ import { useProcessStatuses } from '@/lib/hooks/use-process-statuses';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Briefcase,
@@ -179,14 +180,36 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {s?.resume_count === 0 && (
+        <Card className="border-2 border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="bg-primary text-primary-foreground">Step 1</Badge>
+                <h3 className="font-semibold text-base">Complete your profile & upload a resume</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Set your career preferences and upload your resume so CareerPilot AI can automatically match you to relevant jobs.
+              </p>
+            </div>
+            <Link href="/onboarding">
+              <Button size="sm" className="shrink-0 font-medium">
+                Complete Onboarding
+                <ArrowRight className="h-4 w-4 ml-1.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Jobs Found"
+          title="Jobs Discovered"
           value={s?.total_jobs_found ?? 0}
-          description="New jobs this week"
+          description={s?.matched_jobs !== undefined ? `${s.matched_jobs} matched to your profile` : "Total across all job boards"}
           icon={<Briefcase className="h-4 w-4" />}
-          trend={{ direction: 'up', value: '+12%' }}
+          trend={{ direction: 'up', value: 'Active Scraper' }}
         />
         <StatsCard
           title="Applications Sent"

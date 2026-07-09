@@ -45,6 +45,7 @@ def _get_db():
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    headline: Optional[str] = None
     summary: Optional[str] = None
     skills: Optional[list] = None
     experience: Optional[list] = None
@@ -53,6 +54,10 @@ class UpdateProfileRequest(BaseModel):
     preferred_roles: Optional[list] = None
     current_role: Optional[str] = None
     total_years_experience: Optional[float] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    certifications: Optional[list] = None
 
 
 class UpdateLocationRequest(BaseModel):
@@ -76,6 +81,7 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
                 "user_id": user_id,
                 "full_name": "",
                 "phone": "",
+                "headline": "",
                 "summary": "",
                 "skills": [],
                 "experience": [],
@@ -84,6 +90,10 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
                 "preferred_location": "",
                 "current_role": "",
                 "total_years_experience": 0,
+                "linkedin_url": "",
+                "github_url": "",
+                "portfolio_url": "",
+                "certifications": [],
             }
 
         def _parse_json(val):
@@ -96,11 +106,13 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
                     return val
             return val
 
+        headline_val = row.get("headline", "") or row.get("current_role", "") or ""
         return {
             "id": str(row["id"]) if row.get("id") else None,
             "user_id": user_id,
             "full_name": row.get("full_name", "") or "",
             "phone": row.get("phone", "") or "",
+            "headline": headline_val,
             "summary": row.get("summary", "") or "",
             "skills": _parse_json(row.get("skills")),
             "experience": _parse_json(row.get("experience")),
@@ -109,6 +121,10 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
             "preferred_location": row.get("preferred_location", "") or "",
             "current_role": row.get("current_role", "") or "",
             "total_years_experience": row.get("total_years_experience", 0) or 0,
+            "linkedin_url": row.get("linkedin_url", "") or "",
+            "github_url": row.get("github_url", "") or "",
+            "portfolio_url": row.get("portfolio_url", "") or "",
+            "certifications": _parse_json(row.get("certifications")),
         }
     finally:
         session.close()
@@ -136,7 +152,7 @@ async def update_profile(
             set_clauses = []
             params: dict[str, Any] = {"uid": uid}
             for key, value in data.items():
-                if key in ("skills", "experience", "education", "preferred_roles"):
+                if key in ("skills", "experience", "education", "preferred_roles", "certifications"):
                     value = json.dumps(value)
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
@@ -149,7 +165,7 @@ async def update_profile(
             cols = ["id", "user_id"]
             params = {"id": new_id, "user_id": uid}
             for key, value in data.items():
-                if key in ("skills", "experience", "education", "preferred_roles"):
+                if key in ("skills", "experience", "education", "preferred_roles", "certifications"):
                     value = json.dumps(value)
                 cols.append(key)
                 params[key] = value
@@ -179,11 +195,13 @@ async def update_profile(
                     return val
             return val
 
+        headline_val = (row.get("headline", "") or row.get("current_role", "") or "") if row else ""
         return {
             "id": str(row["id"]) if row and row.get("id") else None,
             "user_id": user_id,
             "full_name": (row.get("full_name", "") or "") if row else "",
             "phone": (row.get("phone", "") or "") if row else "",
+            "headline": headline_val,
             "summary": (row.get("summary", "") or "") if row else "",
             "skills": _parse_json(row.get("skills")) if row else [],
             "experience": _parse_json(row.get("experience")) if row else [],
@@ -192,6 +210,10 @@ async def update_profile(
             "preferred_location": (row.get("preferred_location", "") or "") if row else "",
             "current_role": (row.get("current_role", "") or "") if row else "",
             "total_years_experience": (row.get("total_years_experience", 0) or 0) if row else 0,
+            "linkedin_url": (row.get("linkedin_url", "") or "") if row else "",
+            "github_url": (row.get("github_url", "") or "") if row else "",
+            "portfolio_url": (row.get("portfolio_url", "") or "") if row else "",
+            "certifications": _parse_json(row.get("certifications")) if row else [],
         }
     except Exception as e:
         session.rollback()

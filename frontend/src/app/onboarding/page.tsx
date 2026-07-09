@@ -126,6 +126,27 @@ export default function OnboardingPage() {
   // API keys state
   const [apiKeys, setApiKeys] = useState({ linkedin: '', indeed: '', naukri: '' });
 
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const data = await api.get<any>('/user-profile');
+      if (data && (data.full_name || (Array.isArray(data.skills) && data.skills.length > 0) || data.summary)) {
+        setProfile({
+          full_name: data.full_name || '',
+          headline: data.headline || data.current_role || '',
+          summary: data.summary || '',
+          skills: Array.isArray(data.skills) ? data.skills.join(', ') : (data.skills || ''),
+          preferred_location: data.preferred_location || '',
+          preferred_roles: Array.isArray(data.preferred_roles) ? data.preferred_roles.join(', ') : (data.preferred_roles || ''),
+          linkedin_url: data.linkedin_url || '',
+          github_url: data.github_url || '',
+        });
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const fetchStatus = useCallback(async () => {
     try {
       const data = await api.get<OnboardingStatus>('/onboarding/status');
@@ -150,7 +171,14 @@ export default function OnboardingPage() {
       return;
     }
     fetchStatus();
-  }, [isAuthenticated, router, fetchStatus]);
+    fetchUserProfile();
+  }, [isAuthenticated, router, fetchStatus, fetchUserProfile]);
+
+  useEffect(() => {
+    if (activeStep === 'setup_profile') {
+      fetchUserProfile();
+    }
+  }, [activeStep, fetchUserProfile]);
 
   // ── Handlers ─────────────────────────────────────────────
 
@@ -163,8 +191,16 @@ export default function OnboardingPage() {
       formData.append('file', file);
       formData.append('name', file.name.replace(/\.(pdf|docx)$/i, ''));
       await api.postForm('/resumes/upload', formData);
-      toast.success('Resume uploaded successfully!');
-      fetchStatus();
+      toast.success('Resume uploaded! Extracting profile...');
+      await fetchStatus();
+      for (let i = 0; i < 8; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const p = await fetchUserProfile();
+        if (p && (p.full_name || (Array.isArray(p.skills) && p.skills.length > 0))) {
+          break;
+        }
+      }
+      toast.success('Profile data extracted from resume!');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {

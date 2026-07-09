@@ -10,6 +10,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
@@ -95,6 +96,40 @@ async def list_applications(
         })
 
     return {"data": applications, "total": total, "page": (offset // limit) + 1, "page_size": limit}
+
+
+class CreateApplicationRequest(BaseModel):
+    job_posting_id: str
+    resume_id: str | None = None
+    status: str = "APPLIED"
+    notes: str | None = None
+
+
+@router.post("")
+@router.post("/")
+async def create_application(
+    payload: CreateApplicationRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(_get_db),
+):
+    """Create a new job application."""
+    from uuid import uuid4
+    app_id = uuid4()
+    db.execute(
+        text("""
+            INSERT INTO applications (id, user_id, job_posting_id, status)
+            VALUES (:id, :uid, :jid, :status)
+            ON CONFLICT (user_id, job_posting_id) DO NOTHING
+        """),
+        {
+            "id": app_id,
+            "uid": _to_uuid(user_id),
+            "jid": _to_uuid(payload.job_posting_id),
+            "status": payload.status.upper(),
+        },
+    )
+    db.commit()
+    return {"id": str(app_id), "status": "applied", "job_posting_id": payload.job_posting_id}
 
 
 @router.get("/stats")

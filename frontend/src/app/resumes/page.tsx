@@ -68,6 +68,7 @@ export default function ResumesPage() {
     },
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] });
       setUploadOpen(false);
       setUploadFile(null);
       setUploadName('');

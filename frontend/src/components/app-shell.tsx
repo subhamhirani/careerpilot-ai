@@ -37,7 +37,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       (p) => pathname === p || pathname.startsWith(p + '/')
     );
     if (isClient && !isLoadingAuth && isAuthenticated && isAuthPage) {
-      router.push('/');
+      if (typeof window !== 'undefined' && sessionStorage.getItem('just_registered') === 'true') {
+        sessionStorage.removeItem('just_registered');
+        router.push('/onboarding');
+      } else {
+        router.push('/');
+      }
     }
   }, [isClient, isLoadingAuth, isAuthenticated, pathname, router]);
 

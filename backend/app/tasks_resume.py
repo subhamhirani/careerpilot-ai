@@ -179,32 +179,39 @@ def process_resume(self, resume_id: str, file_path: str, user_id: str) -> dict:
                     return json.dumps([val] if val.strip() else [])
             return "[]"
 
+        headline_val = profile.current_role or (profile.preferred_roles[0] if profile.preferred_roles else "")
         params = {
             "uid": str(user_id),
             "name": _safe_str(profile.full_name),
             "phone": _safe_str(profile.phone),
+            "headline": _safe_str(headline_val),
             "summary": _safe_str(profile.summary),
             "skills": _safe_json_list(profile.skills),
             "exp": _safe_json_list(profile.work_experience),
             "edu": _safe_json_list(profile.education),
             "targets": _safe_json_list(profile.preferred_roles),
             "locs": _safe_str(profile.preferred_locations),
+            "linkedin": _safe_str(profile.linkedin_url),
+            "github": _safe_str(profile.github_url),
+            "portfolio": _safe_str(profile.portfolio_url),
+            "certs": _safe_json_list(profile.certifications),
         }
 
         if not existing_profile:
             params["id"] = str(uuid.uuid4())
             session.execute(
                 text(
-                    "INSERT INTO user_profiles (id, user_id, full_name, phone, summary, skills, experience, education, preferred_roles, preferred_location, created_at, updated_at) "
-                    "VALUES (:id, :uid, :name, :phone, :summary, :skills, :exp, :edu, :targets, :locs, NOW(), NOW())"
+                    "INSERT INTO user_profiles (id, user_id, full_name, phone, headline, summary, skills, experience, education, certifications, linkedin_url, github_url, portfolio_url, preferred_roles, preferred_location, created_at, updated_at) "
+                    "VALUES (:id, :uid, :name, :phone, :headline, :summary, :skills, :exp, :edu, :certs, :linkedin, :github, :portfolio, :targets, :locs, NOW(), NOW())"
                 ),
                 params,
             )
         else:
             session.execute(
                 text(
-                    "UPDATE user_profiles SET full_name = :name, phone = :phone, summary = :summary, "
-                    "skills = :skills, experience = :exp, education = :edu, "
+                    "UPDATE user_profiles SET full_name = :name, phone = :phone, headline = :headline, summary = :summary, "
+                    "skills = :skills, experience = :exp, education = :edu, certifications = :certs, "
+                    "linkedin_url = :linkedin, github_url = :github, portfolio_url = :portfolio, "
                     "preferred_roles = :targets, "
                     "preferred_location = :locs, updated_at = NOW() WHERE user_id = :uid"
                 ),

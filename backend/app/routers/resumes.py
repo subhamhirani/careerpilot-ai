@@ -81,14 +81,20 @@ async def upload_resume(
     if file.content_type not in (
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
     ):
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
+        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and TXT files are supported")
 
     content = await file.read()
     file_size = len(content)
     resume_id = uuid.uuid4()
     uid = uuid.UUID(user_id)
-    ext = "pdf" if file.content_type == "application/pdf" else "docx"
+    if file.content_type == "application/pdf":
+        ext = "pdf"
+    elif file.content_type == "text/plain":
+        ext = "txt"
+    else:
+        ext = "docx"
     title = name or (file.filename or "untitled").rsplit(".", 1)[0]
     filepath = os.path.join(UPLOAD_DIR, f"{resume_id}.{ext}")
 

@@ -106,6 +106,8 @@ export interface SearchQuery {
 
 export interface DashboardStats {
   total_jobs_found: number;
+  matched_jobs?: number;
+  resume_count?: number;
   total_applications_sent: number;
   pending_approvals: number;
   interview_rate: number;
