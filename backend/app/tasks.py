@@ -43,66 +43,16 @@ _task_retry = retry(
     name="app.tasks.discover_jobs",
 )
 def discover_jobs(self) -> dict:
-    """Run all job scrapers and store new postings.
+    """Run job discovery and store new postings per user.
 
-    Called by Celery Beat every morning at 8:00 AM IST.
+    Scrapes based on each user's first job title and skills and stores only matching jobs.
+    Called by Celery Beat every morning.
     """
     logger.info("Task [discover_jobs] started")
     try:
-        query = os.getenv("JOB_DISCOVERY_QUERY", "software engineer")
-        result = run_all_sources(query)
+        from app.tasks_scraper import scrape_and_store_jobs
+        result = scrape_and_store_jobs(self, user_id=None)
         logger.info("Task [discover_jobs] completed: %s", result)
-
-        # Sync newly discovered jobs into job_postings + user_jobs
-        try:
-            from sqlalchemy import text as sa_text
-            from app.tasks_scraper import _get_db
-            s, e = _get_db()
-            try:
-                copied = s.execute(
-                    sa_text(
-                        """INSERT INTO job_postings
-                             (company_id, title, description, location,
-                              source_url, source_platform, external_id,
-                              hash_key, status, is_active)
-                           SELECT
-                             (SELECT c.id FROM companies c
-                              WHERE c.name = TRIM(cj.company)
-                              ORDER BY c.created_at ASC LIMIT 1),
-                             cj.title, cj.description, cj.location,
-                             cj.url, cj.source, cj.source_job_id,
-                             cj.hash_key, 'new', true
-                           FROM careerpilot_jobs cj
-                           WHERE NOT EXISTS (
-                             SELECT 1 FROM job_postings jp
-                             WHERE jp.hash_key = cj.hash_key
-                           )
-                           RETURNING id"""
-                    ),
-                )
-                new_ids = [r[0] for r in copied.fetchall()]
-                if new_ids:
-                    for jid in new_ids:
-                        s.execute(
-                            sa_text(
-                                """INSERT INTO user_jobs (user_id, job_posting_id, status)
-                                   SELECT u.id, :jid, 'new' FROM users u
-                                   WHERE NOT EXISTS (
-                                     SELECT 1 FROM user_jobs uj
-                                     WHERE uj.job_posting_id = :jid AND uj.user_id = u.id
-                                   )
-                                   ON CONFLICT (user_id, job_posting_id) DO NOTHING"""
-                            ),
-                            {"jid": jid},
-                        )
-                    s.commit()
-                    logger.info("Synced %d new jobs to job_postings + user_jobs", len(new_ids))
-            finally:
-                s.close()
-                e.dispose()
-        except Exception as sync_err:
-            logger.warning("Post-scrape sync to job_postings failed: %s", sync_err)
-
         return result
     except Exception as exc:
         logger.exception("Task [discover_jobs] failed")

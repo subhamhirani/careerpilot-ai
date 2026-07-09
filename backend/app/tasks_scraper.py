@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 from celery import current_app as celery_app
@@ -32,8 +33,60 @@ def _get_db():
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _get_user_job_criteria(user_id: str | None) -> tuple[str | None, list[str]]:
+    """Get user's first job title (primary role) and list of skills."""
+    if not user_id:
+        return None, []
+
+    session, engine = _get_db()
+    try:
+        profile_row = session.execute(
+            text(
+                "SELECT preferred_roles, skills, headline FROM user_profiles WHERE user_id = :uid"
+            ),
+            {"uid": user_id},
+        ).mappings().fetchone()
+
+        if not profile_row:
+            return None, []
+
+        skills = []
+        if profile_row.get("skills"):
+            s = profile_row["skills"]
+            if isinstance(s, str):
+                s = json.loads(s)
+            if isinstance(s, list):
+                skills = [str(x).strip() for x in s if str(x).strip()]
+            elif isinstance(s, dict):
+                for v in s.values():
+                    if isinstance(v, list):
+                        skills.extend(str(x).strip() for x in v if str(x).strip())
+
+        preferred_roles = []
+        if profile_row.get("preferred_roles"):
+            r = profile_row["preferred_roles"]
+            if isinstance(r, str):
+                r = json.loads(r)
+            if isinstance(r, list):
+                preferred_roles = [str(x).strip() for x in r if str(x).strip()]
+
+        first_job_title = None
+        if preferred_roles:
+            first_job_title = preferred_roles[0]
+        elif profile_row.get("headline"):
+            first_job_title = str(profile_row["headline"]).strip()
+
+        return first_job_title, skills
+    except Exception as exc:
+        logger.warning("Failed to fetch job criteria for user %s: %s", user_id, exc)
+        return None, []
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def _build_user_queries(user_id: str | None) -> tuple[list[str], list[str]]:
-    """Build search queries from the user's profile (skills + target roles).
+    """Build search queries based on first job title and then skills based.
 
     Falls back to sensible defaults if no profile is found.
     """
@@ -51,58 +104,74 @@ def _build_user_queries(user_id: str | None) -> tuple[list[str], list[str]]:
     if not user_id:
         return default_linkedin, default_naukri
 
-    session, engine = _get_db()
-    try:
-        profile_row = session.execute(
-            text(
-                "SELECT skills FROM user_profiles WHERE user_id = :uid"
-            ),
-            {"uid": user_id},
-        ).mappings().fetchone()
-
-        if not profile_row:
-            logger.info("No profile for user %s, using default queries", user_id)
-            return default_linkedin, default_naukri
-
-        import json as _json
-
-        skills = []
-        if profile_row.get("skills"):
-            s = profile_row["skills"]
-            if isinstance(s, str):
-                s = _json.loads(s)
-            if isinstance(s, list):
-                skills = [str(x) for x in s if str(x).strip()]
-            elif isinstance(s, dict):
-                for v in s.values():
-                    if isinstance(v, list):
-                        skills.extend(str(x) for x in v if str(x).strip())
-
-        preferred_roles = []
-        if profile_row.get("preferred_roles"):
-            r = profile_row["preferred_roles"]
-            if isinstance(r, str):
-                r = _json.loads(r)
-            if isinstance(r, list):
-                preferred_roles = [str(x) for x in r if str(x).strip()]
-
-        # Merge and deduplicate: preferred roles first, then top skills
-        queries = list(dict.fromkeys(preferred_roles + skills))
-        # Cap at 15 to avoid excessive scraping
-        queries = queries[:15]
-
-        if not queries:
-            return default_linkedin, default_naukri
-
-        logger.info("Built %d user-specific queries for user %s", len(queries), user_id)
-        return queries, queries  # same queries for both portals
-
-    except Exception as exc:
-        logger.warning("Failed to build user queries for %s: %s", user_id, exc)
+    first_job_title, skills = _get_user_job_criteria(user_id)
+    if not first_job_title and not skills:
         return default_linkedin, default_naukri
-    finally:
-        session.close()
-        engine.dispose()
+
+    queries = []
+    # 1. First job title alone
+    if first_job_title:
+        queries.append(first_job_title)
+        # 2. First job title + skills based queries
+        for skill in skills[:8]:
+            q = f"{first_job_title} {skill}".strip()
+            if q not in queries:
+                queries.append(q)
+    else:
+        queries = skills[:8]
+
+    queries = queries[:10]
+    if not queries:
+        return default_linkedin, default_naukri
+
+    logger.info(
+        "Built %d queries based on first job title '%s' and skills for user %s",
+        len(queries),
+        first_job_title,
+        user_id,
+    )
+    return queries, queries
+
+
+def _matches_user_criteria(job: dict, first_job_title: str | None, skills: list[str]) -> bool:
+    """Filter scraped jobs so only jobs matching first job title and skills are kept."""
+    if not first_job_title and not skills:
+        return True
+
+    title = str(job.get("title") or "").lower().strip()
+    description = str(job.get("description") or "").lower().strip()
+    job_skills_raw = job.get("skills") or []
+    if isinstance(job_skills_raw, list):
+        job_skills = " ".join(str(s) for s in job_skills_raw).lower()
+    else:
+        job_skills = str(job_skills_raw).lower()
+
+    combined_text = f"{title} {description} {job_skills}"
+
+    # 1. First job title check: title must match at least one core token of first_job_title
+    if first_job_title:
+        stopwords = {
+            "senior", "junior", "lead", "staff", "principal", "associate",
+            "intern", "and", "or", "for", "the", "in", "with", "of", "to",
+            "at", "level", "i", "ii", "iii", "iv",
+        }
+        tokens = [w for w in re.findall(r"[a-z0-9+#]+", first_job_title.lower()) if len(w) >= 2 and w not in stopwords]
+        if tokens:
+            title_matched = any(token in title for token in tokens)
+            if not title_matched:
+                return False
+
+    # 2. Skills check: must match at least one user skill if defined
+    if skills:
+        skill_matched = any(
+            str(skill).lower().strip() in combined_text
+            for skill in skills
+            if str(skill).strip()
+        )
+        if not skill_matched:
+            return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -144,11 +213,52 @@ def scrape_and_store_jobs(
     """
     logger.info("scrape_and_store_jobs started (user_id=%s, location=%s)", user_id, location)
 
+    if user_id is None:
+        logger.info("Scheduled scrape_and_store_jobs running across all active users")
+        s, e = _get_db()
+        try:
+            users = s.execute(
+                text("SELECT id FROM users WHERE is_active = true")
+            ).mappings().fetchall()
+            user_ids = [str(u["id"]) for u in users]
+        except Exception as err:
+            logger.warning("Could not fetch active users for scheduled scrape: %s", err)
+            user_ids = []
+        finally:
+            s.close()
+            e.dispose()
+
+        if not user_ids:
+            logger.info("No active users found for scheduled scrape")
+            return {"total_scraped": 0, "new_stored": 0, "users_processed": 0}
+
+        total_scraped = 0
+        total_new = 0
+        for uid in user_ids:
+            try:
+                res = scrape_and_store_jobs(
+                    self,
+                    user_id=uid,
+                    linkedin_queries=linkedin_queries,
+                    naukri_queries=naukri_queries,
+                    location=location,
+                    selected_locations=selected_locations,
+                )
+                total_scraped += res.get("total_scraped", 0)
+                total_new += res.get("new_stored", 0)
+            except Exception as exc:
+                logger.warning("Scheduled scrape failed for user %s: %s", uid, exc)
+        return {
+            "total_scraped": total_scraped,
+            "new_stored": total_new,
+            "users_processed": len(user_ids),
+        }
+
     try:
         from app.agents.multi_portal_scraper import scrape_all
         import asyncio
 
-        # Resolve location: explicit param -> user profile -> error
+        # Resolve location: explicit param -> user profile -> default "India"
         resolved_location = location
         if not resolved_location and user_id:
             try:
@@ -164,8 +274,9 @@ def scrape_and_store_jobs(
             except Exception:
                 pass
         if not resolved_location:
-            logger.error("No location for user %s (no request.location and no profile.preferred_location)", user_id)
-            return {"total_scraped": 0, "error": "No location: provide 'location' param or set it in user_profile.preferred_location"}
+            resolved_location = "India"
+
+        first_job_title, skills = _get_user_job_criteria(user_id)
 
         # Use custom queries if provided, otherwise build from user profile
         if linkedin_queries or naukri_queries:
@@ -183,6 +294,17 @@ def scrape_and_store_jobs(
 
         jobs = result["jobs"]
         summary = result["summary"]
+
+        # Filter scraped jobs so we only store jobs matching first job title and skills
+        filtered_jobs = [
+            j for j in jobs
+            if _matches_user_criteria(j, first_job_title, skills)
+        ]
+        logger.info(
+            "Filtered scraped jobs for user %s: kept %d / %d based on first job title '%s' and skills",
+            user_id, len(filtered_jobs), len(jobs), first_job_title,
+        )
+        jobs = filtered_jobs
 
         # Store in PostgreSQL
         session, engine = _get_db()
