@@ -144,7 +144,7 @@ export default function ProfilePage() {
           <div className="space-y-2">
             <Label>Headline</Label>
             {editMode ? (
-              <Input value={form.headline || ''} onChange={(e) => setForm({ ...form, headline: e.target.value })} placeholder="e.g. Network Engineer | SOC Analyst" />
+              <Input value={form.headline || ''} onChange={(e) => setForm({ ...form, headline: e.target.value })} placeholder="e.g. Network Engineer | Infrastructure" />
             ) : (
               <p className="text-sm py-2">{profile?.headline || <span className="text-muted-foreground">Not set</span>}</p>
             )}
@@ -228,7 +228,7 @@ export default function ProfilePage() {
               <Input
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                placeholder="e.g. SOC Analyst"
+                placeholder="e.g. Network Engineer"
                 onKeyDown={(e) => e.key === 'Enter' && addRole()}
               />
               <Button size="sm" onClick={addRole}>
