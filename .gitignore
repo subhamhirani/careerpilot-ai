@@ -25,3 +25,6 @@ backups/
 dummy.pdf
 ollama-linux-amd64.tar.zst
 .vercel
+
+# vendored agent skill repos (kept locally, not tracked)
+.agents/
