@@ -254,7 +254,7 @@ Backup scripts are located in `scripts/backup.sh` and can be triggered manually 
 5. **Open a Pull Request** – the CI pipeline will run automatically.
 6. **Address review comments** promptly; squash‑merge only when all checks pass.
 
-Please read the [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [CONTRIBUTING.md](CONTRIBUTING.md) for detailed policies.
+Please read the [Contributing Guidelines](#contributing-guidelines) section above for detailed policies.
 
 ---
 
