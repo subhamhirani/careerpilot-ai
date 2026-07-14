@@ -20,12 +20,21 @@ Relevance model (resume = subham_hirani_resume.txt):
      tier (Gujarat +10 > Remote +6 > India +4 > International +2). Location is
      intentionally a tiebreaker, not a dominator, so a Gujarat "IT Support"
      never outranks a pan-India "Network Engineer".
-  3. Top 50 are delivered to the LIVE Telegram gateway (reads .env).
+  3. DAILY FRESH: jobs already delivered in any prior run are excluded (tracked
+     in artifacts/scraped_history.jsonl), so the report only lists NEW postings.
+  4. HISTORY: every run writes a timestamped report + JSON snapshot; old runs
+     are never overwritten.
+  5. APPLY: the LinkedIn job URL is the direct-apply link (Easy Apply / external
+     ATS). NOTE: LinkedIn's free guest data exposes NO recruiter/employer email,
+     so Gmail IDs are not available — use `--fetch-emails` (best-effort, off by
+     default) to attempt extraction from each job's detail page.
+  6. Top 50 fresh jobs are delivered to the LIVE Telegram gateway (reads .env).
 
 Run:
   /home/ubuntu/scrapling-venv/bin/python /home/ubuntu/careerpilot/scrapling_integration.py
   .../scrapling_integration.py --dry-run            # rank only, no Telegram
-  .../scrapling_integration.py --use-cache          # reuse last scrape
+  .../scrapling_integration.py --use-cache          # reuse last raw scrape
+  .../scrapling_integration.py --fetch-emails       # best-effort apply-email harvest
 """
 from __future__ import annotations
 
@@ -38,7 +47,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, "/home/ubuntu/careerpilot/backend/app/agents")
-from multi_portal_scraper import scrape_all, LinkedInGuestScraper, JobPosting  # noqa: E402
+from multi_portal_scraper import LinkedInGuestScraper, JobPosting  # noqa: E402
 
 import httpx  # noqa: E402
 
@@ -46,6 +55,7 @@ ROOT = "/home/ubuntu/careerpilot"
 ENV_PATH = os.path.join(ROOT, ".env")
 ART = os.path.join(ROOT, "artifacts")
 CACHE_PATH = os.path.join(ART, "cache_scrapling.json")
+HISTORY_PATH = os.path.join(ART, "scraped_history.jsonl")
 os.makedirs(ART, exist_ok=True)
 
 # Resume-targeted role queries (drives LinkedIn, which honors them).
@@ -128,6 +138,17 @@ TITLE_W = [
     (re.compile(r"it\s*operations|it\s*executive|it\s*associate|it\s*infrastructure", re.I), 17),
 ]
 
+# Emails that are never a real application contact.
+EMAIL_NOISE = re.compile(r"(linkedin|example|noreply|no-reply|donotreply|careers@|jobs@|do-not-reply|notification)", re.I)
+
+
+def job_key(j: JobPosting) -> str:
+    """Stable identity: LinkedIn job id when present, else title||company."""
+    m = re.search(r"/jobs/view/(\d+)", j.url or "")
+    if m:
+        return f"li:{m.group(1)}"
+    return re.sub(r"\s+", " ", f"{j.title}||{j.company}".lower()).strip()
+
 
 def _blob(j: JobPosting) -> str:
     return " ".join([j.description or "", " ".join(j.skills or []),
@@ -168,6 +189,78 @@ def score(j: JobPosting) -> int:
     return s_title + s_skill + loc_tier(j)
 
 
+# ---- History (cross-run dedup) ----
+def load_history() -> dict:
+    hist: dict = {}
+    if os.path.exists(HISTORY_PATH):
+        for line in open(HISTORY_PATH, encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+                hist[rec["key"]] = rec
+            except Exception:
+                continue
+    return hist
+
+
+def seed_history_from_reports(hist: dict) -> int:
+    """Backfill history from any previously-delivered report/JSON snapshots
+    so jobs we already sent are not re-sent. Returns count added."""
+    added = 0
+    for fn in sorted(os.listdir(ART)):
+        path = os.path.join(ART, fn)
+        if fn.startswith("job_report_") and fn.endswith("_scrapling.md"):
+            txt = open(path, encoding="utf-8").read()
+            for m in re.finditer(r"^\|\s*\d+\s*\|\s*\d+\s*\|\s*(.+?)(?:\s*🟢GUJ)?\s*\|\s*(.+?)\s*\|\s*.+?\s*\|\s*\S+\s*\|\s*\[link\]\((.+?)\)\s*\|", txt, re.M):
+                title, company, url = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+                key = re.sub(r"\s+", " ", f"{title}||{company}".lower())
+                if key not in hist:
+                    hist[key] = {"key": key, "title": title, "company": company,
+                                 "url": url, "first_seen": "seeded"}
+                    added += 1
+        elif fn.startswith("top50_") and fn.endswith("_scrapling.json"):
+            try:
+                data = json.load(open(path, encoding="utf-8"))
+            except Exception:
+                continue
+            for d in data:
+                title, company, url = d.get("title", ""), d.get("company", ""), d.get("url", "")
+                key = re.sub(r"\s+", " ", f"{title}||{company}".lower())
+                if key not in hist:
+                    hist[key] = {"key": key, "title": title, "company": company,
+                                 "url": url, "first_seen": "seeded"}
+                    added += 1
+    return added
+
+
+def append_history(records: list[dict]) -> None:
+    if not records:
+        return
+    with open(HISTORY_PATH, "a", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+# ---- Best-effort apply-email harvest (opt-in) ----
+async def fetch_apply_email(url: str) -> str:
+    """Attempt to find a real application email on the job detail page.
+    LinkedIn free pages almost never expose one (returns '')."""
+    try:
+        async with LinkedInGuestScraper()._client() as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            text = r.text
+    except Exception:
+        return ""
+    found = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+    for e in found:
+        if not EMAIL_NOISE.search(e):
+            return e
+    return ""
+
+
 # ---- Telegram delivery (reads .env, never prints creds) ----
 def load_env(path: str) -> dict:
     env = {}
@@ -199,7 +292,7 @@ def send_to_telegram(text: str, doc_path: str) -> bool:
             return False
         with open(doc_path, "rb") as d:
             r2 = client.post(f"{base}/sendDocument",
-                             data={"chat_id": chat, "caption": "CareerPilot — top 50 resume-matched jobs"},
+                             data={"chat_id": chat, "caption": "CareerPilot — fresh resume-matched jobs (top 50)"},
                              files={"document": ("report.md", d, "text/markdown")})
             print(f"Telegram sendDocument: ok={r2.json().get('ok')} mid={r2.json().get('result', {}).get('message_id')}")
         return r2.json().get("ok", False)
@@ -215,7 +308,12 @@ def main():
                     help="Print ranking to stdout only; do NOT send Telegram.")
     ap.add_argument("--use-cache", action="store_true",
                     help="Reuse artifacts/cache_scrapling.json; skip live scrape.")
+    ap.add_argument("--fetch-emails", action="store_true",
+                    help="Best-effort: try to harvest an apply email per job (slow; usually empty on LinkedIn).")
     args = ap.parse_args()
+
+    ts = datetime.now(timezone.utc)
+    stamp = ts.strftime("%Y-%m-%dT%H-%M-%S")
 
     if args.use_cache and os.path.exists(CACHE_PATH):
         print(f"[cache] loading previous scrape from {CACHE_PATH}")
@@ -229,13 +327,12 @@ def main():
             js = asyncio.run(li.search(queries=[q], location=LOCATION, max_pages_per_query=1))
             jobs_raw.extend([asdict_safe(j) for j in js])
         json.dump({"jobs": jobs_raw,
-                   "scraped_at": datetime.now(timezone.utc).isoformat()},
+                   "scraped_at": ts.isoformat()},
                   open(CACHE_PATH, "w"), indent=2, ensure_ascii=False)
 
     jobs = [JobPosting(**j) if isinstance(j, dict) else j for j in jobs_raw]
 
-    # Dedup: by URL, then by normalised (title+company) to collapse the same
-    # role posted under multiple LinkedIn URLs / posted-ago variants.
+    # Dedup within run: by URL, then by normalised (title+company).
     seen_url, seen_key, all_jobs = set(), set(), []
     for j in jobs:
         if j.url in seen_url:
@@ -249,53 +346,84 @@ def main():
 
     # Relevance gate (resume-matched)
     relevant = [j for j in all_jobs if is_relevant(j)]
-    print(f"Total deduped: {len(all_jobs)} | Resume-relevant: {len(relevant)}")
-    for j in relevant:
+
+    # Cross-run dedup: exclude anything already delivered in a prior run.
+    hist = load_history()
+    if not hist:
+        seeded = seed_history_from_reports(hist)
+        if seeded:
+            print(f"Seeded history from prior reports: {seeded} jobs marked as already-seen")
+    fresh = [j for j in relevant if job_key(j) not in hist]
+    print(f"Total deduped: {len(all_jobs)} | Resume-relevant: {len(relevant)} | "
+          f"Already-seen: {len(relevant) - len(fresh)} | FRESH: {len(fresh)}")
+
+    for j in fresh:
         j._score = score(j)            # type: ignore[attr-defined]
         j._guj = loc_tier(j) == 10     # type: ignore[attr-defined]
 
-    relevant.sort(key=lambda x: (-x._score, not x._guj))  # type: ignore[attr-defined]
-    guj = [j for j in relevant if j._guj]                 # type: ignore[attr-defined]
-    top = relevant[:50]
+    fresh.sort(key=lambda x: (-x._score, not x._guj))  # type: ignore[attr-defined]
+    guj = [j for j in fresh if j._guj]                 # type: ignore[attr-defined]
+    top = fresh[:50]
     print(f"Top 50 (capped): {len(top)} | Gujarat-priority in top: {len(guj)}")
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Optional: best-effort apply-email harvest
+    if args.fetch_emails:
+        print("Harvesting apply-emails (best-effort) ...")
+        for j in top:
+            j._email = asyncio.run(fetch_apply_email(j.url))  # type: ignore[attr-defined]
+    else:
+        for j in top:
+            j._email = ""  # type: ignore[attr-defined]
+
+    # Persist newly-seen jobs to history (only on a real run — dry-run must
+    # not consume the fresh set).
+    new_recs = [{"key": job_key(j), "title": j.title, "company": j.company,
+                 "url": j.url, "first_seen": stamp} for j in top]
+    if not args.dry_run:
+        append_history(new_recs)
+
+    now = ts.strftime("%Y-%m-%d %H:%M UTC")
     md_path = os.path.join(ART, f"job_report_{stamp}_scrapling.md")
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
-        "# CareerPilot — Jobs Scrape Report (resume-matched)",
+        "# CareerPilot — Fresh Jobs Report (resume-matched, new since last run)",
         "",
         f"*Generated: {now}*",
-        f"*Method:* LinkedIn guest search driven with {len(ROLE_QUERIES)} resume-targeted role queries @ {LOCATION}. Naukri/keyless APIs excluded (return query-ignoring noise from this host).",
-        f"*Resume-relevant jobs:* {len(relevant)}  |  *Gujarat-priority:* {len(guj)}  |  *Total scraped/deduped:* {len(all_jobs)}",
+        f"*Method:* LinkedIn guest search, {len(ROLE_QUERIES)} resume-targeted role queries @ {LOCATION}. Already-delivered jobs excluded.",
+        f"*Resume-relevant scraped:* {len(relevant)}  |  *Fresh (new):* {len(fresh)}  |  *Gujarat-priority in fresh:* {len(guj)}",
         "",
-        "| # | Score | Role | Company | Location | Source | Apply |",
-        "|---|------:|------|---------|----------|--------|-------|",
+        "| # | Score | Role | Company | Location | Apply (LinkedIn) | Apply Email |",
+        "|---|------:|------|---------|----------|-----------------|-------------|",
     ]
     for i, j in enumerate(top, 1):
         tag = " 🟢GUJ" if j._guj else ""                       # type: ignore[attr-defined]
         url = j.url or ""
         url_md = f"[link]({url})" if url else "-"
+        email = j._email or "—"                                # type: ignore[attr-defined]
         lines.append(f"| {i} | {j._score} | {md_escape(j.title)}{tag} | {md_escape(j.company)} | "  # type: ignore[attr-defined]
-                     f"{md_escape(j.location)} | {j.source} | {url_md} |")
+                     f"{md_escape(j.location)} | {url_md} | {md_escape(email)} |")
+    lines.append("")
+    lines.append("> Apply via the LinkedIn link (Easy Apply / external ATS). "
+                 "LinkedIn's free guest data exposes no recruiter email, so the Apply Email column is usually empty — use `--fetch-emails` to attempt a harvest per job.")
     report = "\n".join(lines) + "\n"
 
     with open(md_path, "w") as f:
         f.write(report)
     top_json = [{"title": j.title, "company": j.company, "location": j.location,
                  "source": j.source, "url": j.url, "score": j._score,   # type: ignore[attr-defined]
-                 "gujarat": j._guj} for j in top]                       # type: ignore[attr-defined]
-    with open(os.path.join(ART, "top50_scrapling.json"), "w") as f:
+                 "gujarat": j._guj, "email": j._email} for j in top]   # type: ignore[attr-defined]
+    with open(os.path.join(ART, f"top50_{stamp}_scrapling.json"), "w") as f:
+        json.dump(top_json, f, indent=2, ensure_ascii=False)
+    with open(os.path.join(ART, "top50_scrapling.json"), "w") as f:  # latest snapshot
         json.dump(top_json, f, indent=2, ensure_ascii=False)
 
     # Telegram text (top 15)
-    txt = [f"📋 *CareerPilot — resume-matched jobs* ({now})",
-           f"Relevant: *{len(relevant)}* | Gujarat: *{len(guj)}* | scraped: {len(all_jobs)}",
+    txt = [f"📋 *CareerPilot — fresh resume-matched jobs* ({now})",
+           f"Fresh: *{len(fresh)}* (excludes {len(relevant) - len(fresh)} already-sent) | Gujarat: *{len(guj)}*",
            "*Top matches:*"]
     for i, j in enumerate(top[:15], 1):
         tag = " 🟢" if j._guj else ""                              # type: ignore[attr-defined]
         txt.append(f"{i}. {j.title}{tag} — {j.company} ({j.location})")
-    txt.append("Full ranked report (top 50) attached ↓")
+    txt.append("Apply links in the attached report ↓")
 
     if args.dry_run:
         print("\n[DRY RUN] Would send:\n" + "\n".join(txt))
@@ -307,7 +435,6 @@ def main():
 
 
 def asdict_safe(j: JobPosting) -> dict:
-    # JobPosting has no asdict; build manually.
     return {
         "source": j.source, "source_job_id": j.source_job_id, "title": j.title,
         "company": j.company, "location": j.location, "description": j.description,
