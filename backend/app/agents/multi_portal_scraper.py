@@ -149,8 +149,21 @@ class LinkedInGuestScraper:
                 logger.info("LinkedIn [%s] page %d: %s", query, page + 1, url)
 
                 try:
-                    resp = await client.get(url)
-                    resp.raise_for_status()
+                    resp = None
+                    for attempt in range(4):
+                        try:
+                            resp = await client.get(url)
+                            resp.raise_for_status()
+                            break
+                        except httpx.HTTPStatusError as he:
+                            if he.response.status_code == 429 and attempt < 3:
+                                wait = 5 * (attempt + 1)
+                                logger.warning("LinkedIn 429 for [%s]; backing off %ds", query, wait)
+                                await asyncio.sleep(wait)
+                                continue
+                            raise
+                    if resp is None:
+                        continue
                 except httpx.HTTPStatusError as exc:
                     logger.warning("LinkedIn HTTP error: %s", exc)
                     continue
