@@ -74,7 +74,7 @@ def _get_groq_client():
     return _groq_client
 
 
-def _get_gemini_model(model_name: str = "gemini-1.5-flash"):
+def _get_gemini_model(model_name: str = "gemini-2.0-flash"):
     """Return a cached Gemini generative model instance."""
     global _gemini_model
     if _gemini_model is None:
@@ -100,7 +100,7 @@ def _call_groq(
     system_prompt: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
-    model: str = "llama3-70b-8192",
+    model: str = "llama-3.3-70b-versatile",
 ) -> str:
     """Send a prompt to Groq and return the text response."""
     client = _get_groq_client()
@@ -128,7 +128,7 @@ def _call_gemini(
     system_prompt: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
-    model: str = "gemini-1.5-flash",
+    model: str = "gemini-2.0-flash",
 ) -> str:
     """Send a prompt to Gemini and return the text response."""
     model_instance = _get_gemini_model(model)
@@ -212,7 +212,7 @@ def query_llm(
                 temperature=temperature,
                 max_tokens=max_tokens,
                 model=model or (  # default model per provider
-                    "llama3-70b-8192" if provider_name == "groq" else "gemini-1.5-flash"
+                    "llama-3.3-70b-versatile" if provider_name == "groq" else "gemini-2.0-flash"
                 ),
             )
         except (LLMProviderError, Exception) as exc:

@@ -33,8 +33,9 @@ def _get_db():
 
 
 def _extract_text_from_file(file_path: str, file_type: str) -> str:
-    """Extract text from a PDF or DOCX file."""
-    if file_type.upper() == "PDF":
+    """Extract text from a PDF, DOCX, or plain-text file."""
+    ft = (file_type or "").upper()
+    if ft == "PDF":
         try:
             import PyPDF2
             reader = PyPDF2.PdfReader(file_path)
@@ -42,13 +43,20 @@ def _extract_text_from_file(file_path: str, file_type: str) -> str:
         except ImportError:
             logger.warning("PyPDF2 not installed, returning empty text")
             return ""
-    elif file_type.upper() == "DOCX":
+    elif ft == "DOCX":
         try:
             from docx import Document
             doc = Document(file_path)
             return "\n".join(p.text for p in doc.paragraphs)
         except ImportError:
             logger.warning("python-docx not installed, returning empty text")
+            return ""
+    elif ft in ("TXT", "TEXT", "MD", "MARKDOWN"):
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        except OSError as exc:
+            logger.warning("Failed to read text file %s: %s", file_path, exc)
             return ""
     return ""
 
