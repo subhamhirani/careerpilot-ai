@@ -104,10 +104,21 @@ delivers a ranked top-50 report to the live Telegram gateway. Rewritten 2026-07-
   dominator (old bug: +15 Gujarat boost pushed unrelated pan-India jobs to top).
 - **Run**: `/home/ubuntu/scrapling-venv/bin/python scrapling_integration.py`
   (`--dry-run` validates ranking w/o Telegram; `--use-cache` reuses `artifacts/
-  cache_scrapling.json`). Reads `TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USER_ID` from `.env`.
+  cache_scrapling.json`; `--fetch-emails` best-effort apply-email harvest, off by
+  default). Reads `TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USER_ID` from `.env`.
+- **History + daily-fresh dedup (added 2026-07-14)**: every delivered job is
+  recorded in `artifacts/scraped_history.jsonl` (keyed by LinkedIn id or
+  title||company). The daily report EXCLUDES already-delivered jobs, so Telegram
+  only ever gets NEW postings. First run seeds history from prior report/JSON
+  snapshots. Reports are timestamped (`job_report_YYYY-MM-DDTHH-MM-SS_scrapling.md`)
+  and never overwritten → full per-run history preserved.
+- **Apply = LinkedIn URL** (Easy Apply / external ATS). LinkedIn free guest data
+  exposes NO recruiter/employer email, so there is no Gmail ID to include — the
+  report's Apply Email column is normally empty by design (not a bug).
 - **LinkedIn 429 fix** (multi_portal_scraper.py): 4× retry w/ 5s·attempt backoff.
-- **Artifacts**: `job_report_YYYY-MM-DD_scrapling.md` (ranked report),
-  `top50_scrapling.json` (machine-readable), `cache_scrapling.json` (raw scrape).
+- **Artifacts**: `job_report_<ts>_scrapling.md` (ranked report),
+  `top50_<ts>_scrapling.json` (per-run), `top50_scrapling.json` (latest),
+  `cache_scrapling.json` (raw scrape), `scraped_history.jsonl` (delivered-job log).
 
 ### 3. LinkedIn-scraped jobs require generic SWE skills
 Subham's infra/network profile shows `missing=66-69` on SWE roles (expected — his
