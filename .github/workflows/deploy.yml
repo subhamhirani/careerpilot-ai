@@ -38,24 +38,11 @@ jobs:
       run: pytest -x -q 2>&1 || echo "No tests found"
 
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && secrets.HOST != ''
     needs: backend-test
     runs-on: ubuntu-latest
     steps:
-    - name: Check deploy secrets
-      run: |
-        if [ -z "${HOST:-}" ] || [ -z "${SSH_PRIVATE_KEY:-}" ]; then
-          echo "Deploy secrets not configured, skipping deploy"
-          echo "skip_deploy=true" >> $GITHUB_OUTPUT
-        else
-          echo "skip_deploy=false" >> $GITHUB_OUTPUT
-        fi
-      id: check_secrets
-      env:
-        HOST: ${{ secrets.HOST }}
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     - name: Deploy via SSH
-      if: steps.check_secrets.outputs.skip_deploy == 'false'
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.HOST }}
@@ -108,8 +95,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-        cache: 'yarn'
-        cache-dependency-path: frontend/yarn.lock
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
 
     - name: Install Vercel CLI
       run: npm install -g vercel@latest
@@ -121,6 +108,7 @@ jobs:
         npm run build
 
     - name: Deploy to Vercel
+      if: env.VERCEL_TOKEN != ''
       env:
         VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
