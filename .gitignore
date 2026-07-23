@@ -28,3 +28,20 @@ ollama-linux-amd64.tar.zst
 
 # vendored agent skill repos (kept locally, not tracked)
 .agents/
+
+# Generated artifacts and local data
+artifacts/
+application-packages/
+docs/status/
+*.jsonl
+
+# Test files
+test_*.py
+*_test.py
+scripts/test_*.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
