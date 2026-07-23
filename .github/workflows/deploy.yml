@@ -38,11 +38,21 @@ jobs:
       run: pytest -x -q 2>&1 || echo "No tests found"
 
   deploy:
-    if: github.event_name == 'push' && secrets.HOST != ''
+    if: github.event_name == 'push'
     needs: backend-test
     runs-on: ubuntu-latest
     steps:
+    - name: Check SSH secrets
+      run: |
+        if [ -z "${{ secrets.HOST }}" ] || [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          echo "Deploy secrets not configured, skipping"
+          echo "skip_deploy=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip_deploy=false" >> $GITHUB_OUTPUT
+        fi
+      id: check_secrets
     - name: Deploy via SSH
+      if: steps.check_secrets.outputs.skip_deploy == 'false'
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.HOST }}
