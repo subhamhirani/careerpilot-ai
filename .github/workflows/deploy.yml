@@ -38,7 +38,7 @@ jobs:
       run: pytest -x -q 2>&1 || echo "No tests found"
 
   deploy:
-    if: github.event_name == 'push' && secrets.HOST != ''
+    if: github.event_name == 'push' && ${{ secrets.HOST }} != ''
     needs: backend-test
     runs-on: ubuntu-latest
     steps:
