@@ -37,21 +37,33 @@ jobs:
       name: Run tests
       run: pytest -x -q 2>&1 || echo "No tests found"
 
-  deploy:
-    if: github.event_name == 'push' && env.HOST != ''
+  deploy-check:
     needs: backend-test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    env:
-      HOST: ${{ secrets.HOST }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      USERNAME: ${{ secrets.USERNAME }}
+    outputs:
+      should_deploy: ${{ steps.check_secrets.outputs.should_deploy }}
     steps:
     - name: Check deploy secrets
+      id: check_secrets
       run: |
         if [ -z "${HOST}" ] || [ -z "${SSH_PRIVATE_KEY}" ] || [ -z "${USERNAME}" ]; then
           echo "Deploy secrets not configured, skipping deploy"
-          exit 0
+          echo "should_deploy=false" >> $GITHUB_OUTPUT
+        else
+          echo "Deploy secrets found"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
         fi
+      env:
+        HOST: ${{ secrets.HOST }}
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        USERNAME: ${{ secrets.USERNAME }}
+
+  deploy:
+    needs: [backend-test, deploy-check]
+    if: needs.deploy-check.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
     - name: Deploy via SSH
       uses: appleboy/ssh-action@v1
       with:
