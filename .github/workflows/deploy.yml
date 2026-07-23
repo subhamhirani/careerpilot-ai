@@ -44,12 +44,18 @@ jobs:
     steps:
     - name: Check deploy secrets
       run: |
-        if [ -z "${{ secrets.HOST }}" ] || [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+        if [ -z "${HOST:-}" ] || [ -z "${SSH_PRIVATE_KEY:-}" ]; then
           echo "Deploy secrets not configured, skipping deploy"
-          exit 0
+          echo "skip_deploy=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip_deploy=false" >> $GITHUB_OUTPUT
         fi
+      id: check_secrets
+      env:
+        HOST: ${{ secrets.HOST }}
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     - name: Deploy via SSH
-      if: ${{ secrets.HOST != '' && secrets.SSH_PRIVATE_KEY != '' }}
+      if: steps.check_secrets.outputs.skip_deploy == 'false'
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.HOST }}
