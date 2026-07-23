@@ -38,11 +38,16 @@ jobs:
       run: pytest -x -q 2>&1 || echo "No tests found"
 
   deploy:
-    if: github.event_name == 'push' && secrets.HOST != ''
+    if: github.event_name == 'push' && env.HOST != ''
     needs: backend-test
     runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.HOST }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      USERNAME: ${{ secrets.USERNAME }}
     steps:
     - name: Deploy via SSH
+      if: env.HOST != ''
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.HOST }}
