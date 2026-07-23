@@ -56,7 +56,6 @@ jobs:
           docker compose build backend frontend
           docker compose up -d backend
           sleep 10
-          
           for i in $(seq 1 12); do
             if curl -sf http://localhost:7899/health >/dev/null 2>&1; then
               echo "Backend healthy"
@@ -69,10 +68,8 @@ jobs:
             echo "Waiting... ($i/12)"
             sleep 5
           done
-          
           docker compose up -d frontend
           sleep 5
-          
           for i in $(seq 1 6); do
             if curl -sf http://localhost:3000 >/dev/null 2>&1; then
               echo "Frontend healthy"
@@ -85,35 +82,33 @@ jobs:
             echo "Waiting... ($i/6)"
             sleep 5
           done
-          
           docker compose up -d
           echo "Deployment complete!"
           docker compose ps
         username: ${{ secrets.USERNAME }}
 
-  # ── Vercel Frontend Deployment ──────────────────────────────
   vercel-deploy:
     needs: backend-test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'yarn'
         cache-dependency-path: frontend/yarn.lock
-    
+
     - name: Install Vercel CLI
       run: npm install -g vercel@latest
-    
+
     - name: Build frontend
       run: |
         cd frontend
         npm ci
         npm run build
-    
+
     - name: Deploy to Vercel
       env:
         VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
